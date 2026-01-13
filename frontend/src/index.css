@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+  /* Light Theme - Metronic Style */
+  --color-background: #f9fafb;
+  --color-foreground: #1f2937;
+  --color-card: #ffffff;
+  --color-card-foreground: #1f2937;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1f2937;
+  --color-primary: #2a75ff;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f3f4f6;
+  --color-secondary-foreground: #1f2937;
+  --color-muted: #f3f4f6;
+  --color-muted-foreground: #6b7280;
+  --color-accent: #eff6ff;
+  --color-accent-foreground: #2a75ff;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #e5e7eb;
+  --color-input: #f9fafb;
+  --color-ring: #2a75ff;
+  --radius: 0.75rem;
+
+  /* Status Colors - Light backgrounds with dark text */
+  --color-success-bg: #d1fae5;
+  --color-success-text: #065f46;
+  --color-warning-bg: #dbeafe;
+  --color-warning-text: #1e40af;
+  --color-error-bg: #fee2e2;
+  --color-error-text: #991b1b;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
