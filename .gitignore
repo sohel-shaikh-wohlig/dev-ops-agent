@@ -251,3 +251,4 @@ packages/react-devtools-timeline/dist
 api/.env.development
 api/.env.uat
 *.env
+api/.env.uat
