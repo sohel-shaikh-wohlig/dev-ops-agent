@@ -14,12 +14,13 @@ const navItems = [
 export function Sidebar() {
 
     return (
-        <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
-            <div className="p-6 border-b border-gray-200">
-                <h1 className="text-2xl font-bold text-[#2a75ff]">
-                    GitOps
-                </h1>
-                <p className="text-sm text-gray-500 mt-1">Automation Dashboard</p>
+        <aside className="w-64 bg-card border-r border-border flex flex-col transition-colors duration-200">
+            <div className="p-6 border-b border-border">
+                <img
+                    src="https://cdn.prod.website-files.com/67c8393507c6a7eae2efd881/6880aa06d83a6427ccf875ad_allvest%20logo%201.svg"
+                    alt="Allvest Logo"
+                    className="h-8 w-auto"
+                />
             </div>
             <nav className="flex-1 p-4 space-y-1">
                 {navItems.map((item) => {
@@ -32,8 +33,8 @@ export function Sidebar() {
                                 cn(
                                     "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 font-medium text-sm",
                                     isActive
-                                        ? "bg-[#eff6ff] text-[#2a75ff]"
-                                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                        ? "bg-accent text-accent-foreground"
+                                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                                 )
                             }
                         >
@@ -43,14 +44,14 @@ export function Sidebar() {
                     );
                 })}
             </nav>
-            <div className="p-4 border-t border-gray-200">
+            <div className="p-4 border-t border-border">
                 <div className="flex items-center gap-3 px-4 py-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-sm">
                         U
                     </div>
                     <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-900">User</p>
-                        <p className="text-xs text-gray-500">Admin</p>
+                        <p className="text-sm font-semibold text-foreground">User</p>
+                        <p className="text-xs text-muted-foreground">Admin</p>
                     </div>
                 </div>
             </div>

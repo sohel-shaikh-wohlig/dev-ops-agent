@@ -9,8 +9,8 @@ export function Dashboard() {
         <main className="flex-1 overflow-y-auto p-6">
             <div className="max-w-7xl mx-auto">
                 <div className="mb-6">
-                    <h2 className="text-xl font-semibold text-gray-900">Active Deployments</h2>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <h2 className="text-xl font-semibold text-foreground">Active Deployments</h2>
+                    <p className="text-sm text-muted-foreground mt-1">
                         Monitor and manage your GitOps deployments across all clusters
                     </p>
                 </div>
