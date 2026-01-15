@@ -3,7 +3,7 @@ import { Sidebar } from "./components/layout/Sidebar";
 import { Topbar } from "./components/layout/Topbar";
 import { ThemeProvider } from "./components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import { DashboardPage } from "./pages/dashboard/DashboardPage";
+import { DashboardPage } from "@/features/dashboard";
 import { ArgoCDPage } from "@/features/argocd";
 import { MemberManagement } from "@/features/members";
 

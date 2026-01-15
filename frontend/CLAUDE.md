@@ -42,13 +42,14 @@ src/
 │   │   ├── types/           # ArgoCD + Deployment types
 │   │   ├── ArgoCDPage.tsx   # Main page component
 │   │   └── index.ts         # Barrel exports
+│   ├── dashboard/
+│   │   ├── DashboardPage.tsx
+│   │   └── index.ts         # Barrel exports
 │   └── members/
 │       ├── components/      # MemberManagement, AddMemberForm
 │       ├── services/        # member-service.ts
 │       ├── types/           # Member types
 │       └── index.ts         # Barrel exports
-├── pages/                   # Route entry points
-│   └── dashboard/           # DashboardPage
 ├── services/                # Shared services
 │   └── api-client.ts        # Base HTTP client (http://localhost:8000/api)
 ├── hooks/                   # Shared hooks (useGitOpsData)
@@ -58,7 +59,8 @@ src/
 ### Feature Module Pattern
 Each feature is self-contained with its own components, services, types, and barrel export:
 ```typescript
-// Import from feature barrel export
+// Import from feature barrel exports
+import { DashboardPage } from "@/features/dashboard";
 import { ArgoCDPage, DeploymentCard } from "@/features/argocd";
 import { MemberManagement, type Member } from "@/features/members";
 ```
