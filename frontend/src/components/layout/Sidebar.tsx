@@ -1,10 +1,11 @@
-import { Server, GitBranch, Workflow, Settings, Users } from "lucide-react";
+import { Server, GitBranch, Workflow, Settings, Users, PieChart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { NavLink } from "react-router-dom";
 
 const navItems = [
-    { name: "Clusters", icon: Server, href: "/" },
+    { name: "Dashboard", icon: PieChart, href: "/" },
+    { name: "ArgoCD", icon: Server, href: "/argocd" },
     { name: "Members", icon: Users, href: "/members" },
     { name: "Repositories", icon: GitBranch, href: "/repositories" },
     { name: "Pipelines", icon: Workflow, href: "/pipelines" },
