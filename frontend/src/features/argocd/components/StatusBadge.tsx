@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
-import type { DeploymentStatus } from "@/types/gitops";
-import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import type { DeploymentStatus } from "../types";
+import { AlertCircle, Loader2 } from "lucide-react";
 
 interface StatusBadgeProps {
     status: DeploymentStatus;

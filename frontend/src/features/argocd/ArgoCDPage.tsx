@@ -1,25 +1,32 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchApplications, mapArgoCDAppToDeployment } from "@/services/argocd-service";
-import { DeploymentCard } from "@/features/argocd/components/DeploymentCard";
+import { fetchApplications, mapArgoCDAppToDeployment } from "./services/argocd-service";
+import { DeploymentCard } from "./components/DeploymentCard";
 import { Loader2, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ApplicationSidebar } from "./components/ApplicationSidebar";
+import { useState } from "react";
 
 export function ArgoCDPage() {
+    const [selectedAppName, setSelectedAppName] = useState<string | null>(null);
     const { data: deployments = [], isLoading, error, refetch } = useQuery({
         queryKey: ['argocd-applications'],
         queryFn: async () => {
             const apps = await fetchApplications();
             return apps.map(mapArgoCDAppToDeployment);
         },
-        refetchInterval: 5000,
+        refetchInterval: 30000,
     });
 
     // Derived Stats
     const totalApps = deployments.length;
     const healthyApps = deployments.filter(d => d.health === 'Healthy').length;
     const outOfSyncApps = deployments.filter(d => d.syncStatus === 'OutOfSync').length;
+
+    const handleAppClick = (app: any) => {
+        setSelectedAppName(app.name);
+    };
 
     if (isLoading && deployments.length === 0) {
         return (
@@ -93,10 +100,20 @@ export function ArgoCDPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {deployments.map((deployment) => (
-                        <DeploymentCard key={deployment.id} deployment={deployment} />
+                        <DeploymentCard
+                            key={deployment.id}
+                            deployment={deployment}
+                            onClick={handleAppClick}
+                        />
                     ))}
                 </div>
             </div>
+
+            <ApplicationSidebar
+                open={!!selectedAppName}
+                onOpenChange={(open) => !open && setSelectedAppName(null)}
+                appName={selectedAppName}
+            />
         </main>
     );
 }

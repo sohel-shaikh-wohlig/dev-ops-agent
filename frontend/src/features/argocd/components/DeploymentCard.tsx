@@ -1,30 +1,35 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "./StatusBadge";
-import type { Deployment } from "@/types/gitops";
+import type { Deployment } from "../types";
 import { Server, GitBranch, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
 interface DeploymentCardProps {
     deployment: Deployment;
+    onClick?: (deployment: Deployment) => void;
 }
 
-export function DeploymentCard({ deployment }: DeploymentCardProps) {
+export function DeploymentCard({ deployment, onClick }: DeploymentCardProps) {
     // ... inside component ...
-    const handleCopy = (text: string, label: string) => {
+    const handleCopy = (e: React.MouseEvent, text: string, label: string) => {
+        e.stopPropagation();
         navigator.clipboard.writeText(text);
         toast.success(`${label} copied to clipboard`);
     };
 
     return (
-        <Card className="hover:shadow-md transition-all duration-300 hover:scale-[1.02] border-border bg-card">
+        <Card
+            className="hover:shadow-md transition-all duration-300 hover:scale-[1.02] border-border bg-card cursor-pointer"
+            onClick={() => onClick?.(deployment)}
+        >
             <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                     <div className="space-y-1">
                         <CardTitle className="text-base font-semibold text-foreground">{deployment.name}</CardTitle>
                         <p
                             className="text-xs font-medium text-muted-foreground cursor-pointer hover:text-primary transition-colors"
-                            onClick={() => handleCopy(deployment.namespace, "Namespace")}
+                            onClick={(e) => handleCopy(e, deployment.namespace, "Namespace")}
                             title="Click to copy namespace"
                         >
                             {deployment.namespace}
@@ -39,7 +44,7 @@ export function DeploymentCard({ deployment }: DeploymentCardProps) {
                     <span className="text-muted-foreground">Cluster:</span>
                     <span
                         className="font-medium text-foreground cursor-pointer hover:text-primary transition-colors"
-                        onClick={() => handleCopy(deployment.cluster.name, "Cluster")}
+                        onClick={(e) => handleCopy(e, deployment.cluster.name, "Cluster")}
                     >
                         {deployment.cluster.name}
                     </span>
@@ -49,7 +54,7 @@ export function DeploymentCard({ deployment }: DeploymentCardProps) {
                     <span className="text-muted-foreground">Repo:</span>
                     <span
                         className="font-medium text-foreground truncate max-w-[150px] cursor-pointer hover:text-primary transition-colors"
-                        onClick={() => handleCopy(deployment.repository, "Repository URL")}
+                        onClick={(e) => handleCopy(e, deployment.repository, "Repository URL")}
                         title={deployment.repository}
                     >
                         {deployment.repository.split('/').pop()}

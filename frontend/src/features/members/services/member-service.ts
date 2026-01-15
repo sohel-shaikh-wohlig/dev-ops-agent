@@ -1,4 +1,4 @@
-import type { Member } from '@/types/member';
+import type { Member } from '../types';
 
 const API_URL = 'https://dummyjson.com/c/770d-fe9c-4cba-ad30';
 

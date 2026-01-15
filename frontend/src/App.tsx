@@ -1,11 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Topbar } from "./components/layout/Topbar";
-import MemberManagement from "./components/MemberManagement";
 import { ThemeProvider } from "./components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
-import { ArgoCDPage } from "./pages/argocd/ArgoCDPage";
+import { ArgoCDPage } from "@/features/argocd";
+import { MemberManagement } from "@/features/members";
 
 function App() {
   return (

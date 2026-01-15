@@ -28,25 +28,39 @@ This is a **React 19 + Vite + TypeScript** GitOps automation dashboard for manag
 ### Path Alias
 `@/` resolves to `src/` (configured in vite.config.ts and tsconfig)
 
-## Project Structure
+## Project Structure (Feature-based)
 
 ```
 src/
 ├── components/
-│   ├── layout/           # Sidebar, Topbar (global layout)
-│   └── ui/               # Shadcn/ui primitives (button, card, badge, etc.)
-├── features/             # Feature-specific components
-│   └── argocd/components/  # DeploymentCard, StatusBadge, ApplicationSidebar
-├── pages/                # Route page components
-│   ├── dashboard/        # DashboardPage
-│   └── argocd/           # ArgoCDPage (main feature)
-├── services/             # API clients
-│   ├── api-client.ts     # Base HTTP client (http://localhost:8000/api)
-│   ├── argocd-service.ts # ArgoCD endpoints + data mapping
-│   └── memberService.ts  # Member API + data augmentation
-├── hooks/                # Custom React hooks
-├── types/                # TypeScript interfaces (gitops.ts, member.ts)
-└── lib/utils.ts          # cn() utility for className merging
+│   ├── layout/              # Sidebar, Topbar (global layout)
+│   └── ui/                  # Shadcn/ui primitives (button, card, badge, etc.)
+├── features/                # Self-contained feature modules
+│   ├── argocd/
+│   │   ├── components/      # DeploymentCard, StatusBadge, ApplicationSidebar
+│   │   ├── services/        # argocd-service.ts (API calls + data mapping)
+│   │   ├── types/           # ArgoCD + Deployment types
+│   │   ├── ArgoCDPage.tsx   # Main page component
+│   │   └── index.ts         # Barrel exports
+│   └── members/
+│       ├── components/      # MemberManagement, AddMemberForm
+│       ├── services/        # member-service.ts
+│       ├── types/           # Member types
+│       └── index.ts         # Barrel exports
+├── pages/                   # Route entry points
+│   └── dashboard/           # DashboardPage
+├── services/                # Shared services
+│   └── api-client.ts        # Base HTTP client (http://localhost:8000/api)
+├── hooks/                   # Shared hooks (useGitOpsData)
+└── lib/utils.ts             # cn() utility for className merging
+```
+
+### Feature Module Pattern
+Each feature is self-contained with its own components, services, types, and barrel export:
+```typescript
+// Import from feature barrel export
+import { ArgoCDPage, DeploymentCard } from "@/features/argocd";
+import { MemberManagement, type Member } from "@/features/members";
 ```
 
 ## Key Patterns
@@ -88,7 +102,7 @@ useQuery({
 
 ## Type Definitions
 
-### Deployment Status Types (src/types/gitops.ts)
+### Deployment Status Types (features/argocd/types)
 ```typescript
 type DeploymentStatus = "Healthy" | "Progressing" | "Degraded"
 type HealthStatus = "Healthy" | "Progressing" | "Degraded" | "Missing"

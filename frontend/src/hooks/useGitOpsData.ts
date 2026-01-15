@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { Deployment, DeploymentStatus } from "@/types/gitops";
+import type { Deployment, DeploymentStatus } from "@/features/argocd";
 
 const MOCK_DEPLOYMENTS: Deployment[] = [
     {

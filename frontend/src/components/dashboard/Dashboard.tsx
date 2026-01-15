@@ -1,5 +1,5 @@
 import { Loader2 } from "lucide-react";
-import { DeploymentCard } from "./DeploymentCard";
+import { DeploymentCard } from "@/features/argocd";
 import { useGitOpsData } from "@/hooks/useGitOpsData";
 
 export function Dashboard() {

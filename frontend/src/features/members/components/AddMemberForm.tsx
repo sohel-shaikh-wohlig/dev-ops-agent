@@ -9,7 +9,7 @@ import {
     FieldLabel,
 } from '@/components/ui/field';
 
-import type { Member } from '@/types/member';
+import type { Member } from '../types';
 
 interface AddMemberFormProps {
     onClose: () => void;

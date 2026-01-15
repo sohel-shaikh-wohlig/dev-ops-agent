@@ -57,9 +57,9 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
-import type { Member } from '@/types/member';
-import { fetchMembers } from '@/services/memberService';
-import AddMemberForm from '@/components/AddMemberForm';
+import type { Member } from '../types';
+import { fetchMembers } from '../services/member-service';
+import AddMemberForm from './AddMemberForm';
 
 export default function MemberManagement() {
     // Data state
