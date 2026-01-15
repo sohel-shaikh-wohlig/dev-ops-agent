@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Sidebar } from "./components/layout/Sidebar";
-import { Topbar } from "./components/layout/Topbar";
 import { ThemeProvider } from "./components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { DashboardPage } from "@/features/dashboard";
@@ -14,7 +13,6 @@ function App() {
         <div className="flex h-screen bg-background text-foreground">
           <Sidebar />
           <div className="flex-1 flex flex-col overflow-hidden">
-            <Topbar />
             <Routes>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/argocd" element={<ArgoCDPage />} />

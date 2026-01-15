@@ -35,7 +35,7 @@ export function ApplicationSidebar({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+      <SheetContent className="w-[520px] sm:w-[700px] overflow-y-auto">
         <SheetHeader className="mb-6">
           <SheetTitle className="text-2xl font-bold">
             {appName || "Application Details"}
@@ -44,7 +44,7 @@ export function ApplicationSidebar({
 
         {isLoading ? (
           <div className="space-y-4">
-            <div className="h-20 bg-muted animate-pulse rounded-lg" />
+            <div className="h-16 bg-muted animate-pulse rounded-full" />
             <div className="h-64 bg-muted animate-pulse rounded-lg" />
           </div>
         ) : error ? (
@@ -64,59 +64,82 @@ export function ApplicationSidebar({
           </Alert>
         ) : appDetail ? (
           <div className="space-y-8">
-            {/* Summary Badges */}
-            <div className="flex gap-4">
-              <Badge
-                variant={
-                  appDetail.status.health.status === "Healthy"
-                    ? "success"
-                    : "secondary"
-                }
-                className="flex-1 justify-center py-2 text-sm"
+            {/* Status Pills */}
+            <div className="grid grid-cols-2 gap-4">
+              <div
+                className={`flex items-center justify-center py-3 rounded-full border ${appDetail.status.health.status === "Healthy"
+                    ? "bg-green-500/10 border-green-500/20 text-green-500"
+                    : "bg-yellow-500/10 border-yellow-500/20 text-yellow-500"
+                  }`}
               >
-                {appDetail.status.health.status === "Healthy" && (
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                {appDetail.status.health.status === "Healthy" ? (
+                  <CheckCircle2 className="w-5 h-5 mr-2" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5 mr-2" />
                 )}
-                Health: {appDetail.status.health.status}
-              </Badge>
-              <Badge
-                variant={
-                  appDetail.status.sync.status === "Synced"
-                    ? "default"
-                    : "warning"
-                }
-                className="flex-1 justify-center py-2 text-sm"
+                <span className="font-semibold">Health: {appDetail.status.health.status}</span>
+              </div>
+              <div
+                className={`flex items-center justify-center py-3 rounded-full border ${appDetail.status.sync.status === "Synced"
+                    ? "bg-green-500/10 border-green-500/20 text-green-500"
+                    : "bg-blue-500/10 border-blue-500/20 text-blue-500"
+                  }`}
               >
-                {appDetail.status.sync.status === "OutOfSync" && (
-                  <RefreshCw className="w-4 h-4 mr-2" />
+                {appDetail.status.sync.status === "Synced" ? (
+                  <CheckCircle2 className="w-5 h-5 mr-2" />
+                ) : (
+                  <RefreshCw className="w-5 h-5 mr-2" />
                 )}
-                Sync: {appDetail.status.sync.status}
-              </Badge>
+                <span className="font-semibold">Sync: {appDetail.status.sync.status}</span>
+              </div>
             </div>
 
             {/* Resources List */}
             <div>
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Box className="w-5 h-5" /> Managed Resources
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <Box className="w-6 h-6" /> Managed Resources
               </h3>
-              <div className="border rounded-lg divide-y">
-                {appDetail.status.resources.map((resource, i) => (
-                  <div
-                    key={`${resource.kind}-${resource.name}-${i}`}
-                    className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                  >
-                    <div>
-                      <p className="font-medium text-sm">{resource.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {resource.kind}
-                      </p>
+
+              {appDetail.status.resources && appDetail.status.resources.length > 0 ? (
+                <div className="border border-border/50 rounded-lg overflow-hidden bg-card/50">
+                  {appDetail.status.resources.map((resource, i) => (
+                    <div
+                      key={`${resource.kind}-${resource.name}-${i}`}
+                      className="p-4 flex items-center justify-between border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-bold text-base">{resource.name}</span>
+                        <span className="text-sm text-muted-foreground font-medium">
+                          {resource.kind}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Badge
+                          variant="secondary"
+                          className="bg-secondary/50 hover:bg-secondary/70 px-3 py-1 rounded-full text-xs font-semibold"
+                        >
+                          {resource.status || "Unknown"}
+                        </Badge>
+                        {resource.health?.status && (
+                          <Badge
+                            className={`px-3 py-1 rounded-full text-xs font-semibold border ${resource.health.status === "Healthy"
+                                ? "bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20"
+                                : "bg-yellow-500/10 text-yellow-500 border-yellow-500/20 hover:bg-yellow-500/20"
+                              }`}
+                            variant="outline"
+                          >
+                            {resource.health.status}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                    <Badge variant="outline" className="text-xs">
-                      {resource.status || "Unknown"}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center p-8 border border-dashed rounded-lg text-muted-foreground">
+                  No resources found
+                </div>
+              )}
             </div>
           </div>
         ) : null}
