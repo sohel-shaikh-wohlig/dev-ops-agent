@@ -111,9 +111,16 @@ type HealthStatus = "Healthy" | "Progressing" | "Degraded" | "Missing"
 type SyncStatus = "Synced" | "OutOfSync" | "Unknown"
 ```
 
+## Environment Variables
+
+```bash
+VITE_API_BASE_URL=http://localhost:8000/api  # Backend API base URL
+```
+
+Copy `.env.example` to `.env` for local development. Vite exposes variables prefixed with `VITE_` to the client via `import.meta.env.VITE_*`.
+
 ## Development Notes
 
-- Backend API expected at `http://localhost:8000/api`
 - ArgoCD endpoints: `/argocd/applications`, `/argocd/applications/{appName}`
 - Toast notifications use `toast()` from sonner
 - Date formatting uses date-fns (`formatDistanceToNow` for relative times)
