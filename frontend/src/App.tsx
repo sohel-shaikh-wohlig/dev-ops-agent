@@ -5,32 +5,27 @@ import { Toaster } from "@/components/ui/sonner";
 import { DashboardPage } from "@/features/dashboard";
 import { ArgoCDPage } from "@/features/argocd";
 import { MemberManagement } from "@/features/members";
+import { ConfigMapPage } from "@/features/configmap";
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
-      <BrowserRouter>
+    <BrowserRouter>
+      <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
         <div className="flex h-screen bg-background text-foreground">
           <Sidebar />
           <div className="flex-1 flex flex-col overflow-hidden">
             <Routes>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/argocd" element={<ArgoCDPage />} />
-              <Route
-                path="/members"
-                element={
-                  <main className="flex-1 overflow-y-auto">
-                    <MemberManagement />
-                  </main>
-                }
-              />
+              <Route path="/members" element={<MemberManagement />} />
+              <Route path="/configmap" element={<ConfigMapPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
+          <Toaster />
         </div>
-      </BrowserRouter>
-      <Toaster />
-    </ThemeProvider>
+      </ThemeProvider>
+    </BrowserRouter>
   );
 }
 

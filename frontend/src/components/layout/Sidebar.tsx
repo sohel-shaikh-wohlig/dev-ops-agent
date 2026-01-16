@@ -1,4 +1,4 @@
-import { Server, GitBranch, Workflow, Settings, Users, PieChart } from "lucide-react";
+import { Server, GitBranch, Workflow, Settings, Users, PieChart, File as FileIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { NavLink } from "react-router-dom";
@@ -8,6 +8,7 @@ const navItems = [
     { name: "ArgoCD", icon: Server, href: "/argocd" },
     { name: "Members", icon: Users, href: "/members" },
     { name: "Repositories", icon: GitBranch, href: "/repositories" },
+    { name: "ConfigMap", icon: FileIcon, href: "/configmap" },
     { name: "Pipelines", icon: Workflow, href: "/pipelines" },
     { name: "Settings", icon: Settings, href: "/settings" },
 ];
