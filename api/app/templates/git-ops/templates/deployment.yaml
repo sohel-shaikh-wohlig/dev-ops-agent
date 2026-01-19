@@ -1,0 +1,43 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: {{ .Values.name }}
+  annotations:
+    repoUrl: {{ .Values.annotations.repoUrl | quote }}
+  labels:
+    application: {{ .Values.labels.application }}
+    env: {{ .Values.labels.env }}
+spec:
+  replicas: {{ .Values.replicasCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.name }}
+      annotations:
+        linkerd.io/inject: disabled
+    spec:
+      containers:
+        - name: {{ .Values.name }}
+          image: {{ .Values.image.name }}:{{ .Values.image.tag }}
+          ports:
+            - containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.name }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: db-certs
+              mountPath: /app/certs
+              readOnly: true
+      volumes:
+        - name: db-certs
+          secret:
+            secretName: db-certs
+            defaultMode: 400
+        

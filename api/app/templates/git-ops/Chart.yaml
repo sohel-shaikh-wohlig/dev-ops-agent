@@ -1,0 +1,4 @@
+apiVersion: v1
+description: {{MICRO_SERVICE_NAME}}
+name:  {{MICRO_SERVICE_NAME}}
+version: 1.0.0

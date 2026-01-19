@@ -1,0 +1,21 @@
+name: {{MICRO_SERVICE_NAME}}
+annotations:
+  repoUrl: {{MICRO_SERVICE_URL}}
+labels:
+  application: {{MICRO_SERVICE_NAME}}
+  bu: {{MICRO_SERVICE_NAME}}
+  env: allvest-{{ENVIRONMENT}}
+replicasCount: 1
+containerPort: {{CONTAINER_PORT}}
+image:
+  name: asia-south1-docker.pkg.dev
+  tag: latest
+  pullPolicy: Always
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: {{CONTAINER_PORT}}
+virtualhost:
+  fqdn: {{DOMAIN_NAME}}
+config:
+  

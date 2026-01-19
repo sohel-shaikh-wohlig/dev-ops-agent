@@ -1,0 +1,33 @@
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: {{ .Values.name }}
+spec:
+  routes:
+    - services:
+        - name: {{ .Values.name }}
+          port: {{ .Values.service.port }}
+      timeoutPolicy:
+        idle: infinity
+        response: infinity
+      loadBalancerPolicy:
+        strategy: WeightedLeastRequest
+  virtualhost:
+    fqdn: {{ .Values.virtualhost.fqdn }}
+    corsPolicy:
+      allowCredentials: true
+      allowOrigin:
+        - "*" # allows any origin
+      allowMethods:
+        - GET
+        - POST
+        - OPTIONS
+        - PUT
+        - DELETE
+        - PATCH
+      allowHeaders:
+        - "*" # allows any origin
+      exposeHeaders:
+        - Content-Length
+        - Content-Range
+      maxAge: "10m" # preflight requests can be cached for 10 minutes.
