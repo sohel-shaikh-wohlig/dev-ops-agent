@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from app.core.config import get_settings
 from app.core.logging_config import setup_logging
-from app.routes import argocd, routes, configmap
+from app.routes import argocd, routes, configmap, gitops
 from app.utils.cleanup import cleanup_old_sessions
 
 
@@ -93,6 +93,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.include_router(routes.router, prefix="/api")
 app.include_router(argocd.router, prefix="/api")
 app.include_router(configmap.router, prefix="/api")
+app.include_router(gitops.router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_event():
