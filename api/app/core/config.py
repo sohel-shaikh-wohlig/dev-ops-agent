@@ -3,9 +3,10 @@ Core Configuration
 Loads configuration from .env file using pydantic-settings
 """
 
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic import Field, validator
-from typing import Optional
+from typing import Optional, Union
 from functools import lru_cache
 
 
@@ -13,15 +14,21 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
     # API Settings
-    API_TITLE: str = "ArgoCD API"
+    API_TITLE: str = "DevOps Automation API"
     API_VERSION: str = "1.0.0"
-    API_DESCRIPTION: str = "FastAPI wrapper for ArgoCD operations"
+    API_DESCRIPTION: str = "FastAPI wrapper for DevOps operations"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "DEBUG"
     LOG_FORMAT: str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     LOG_FILE: str = ''
-    UPLOAD_DIR: str = 'temp'
+    UPLOAD_DIR: Path = Field(Path("/tmp/uploads"), env="UPLOAD_DIR")
+    MAX_FILE_SIZE: int = Field(20_971_520, env="MAX_FILE_SIZE")
+
+    @validator("UPLOAD_DIR", pre=True)
+    def parse_upload_dir(cls, v):
+        """Convert string to Path if needed"""
+        return Path(v) if isinstance(v, str) else v
     
     # ArgoCD Server Configuration
     ARGOCD_SERVER: str = Field(..., description="ArgoCD server URL")

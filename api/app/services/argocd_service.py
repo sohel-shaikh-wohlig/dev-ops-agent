@@ -1,15 +1,14 @@
 
+import time
 import requests
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from app.core.exceptions import ArgoCDAPIException, ProjectNotFoundException, TokenExpiredException, TokenRenewalFailedException
+from app.core.exceptions import ApplicationNotFoundException, ArgoCDAPIException, ProjectNotFoundException, TokenExpiredException, TokenRenewalFailedException
 from app.utils.argocd_client import ArgoCDClient
-from app.utils.helpers import extract_application_summary, extract_project_summary
-
+from app.utils.helpers import build_application_spec, extract_application_summary, extract_project_summary
 
 logger = logging.getLogger(__name__)
-
 
 class ArgoCDService:
     """High-level service for ArgoCD operations"""
@@ -29,6 +28,7 @@ class ArgoCDService:
         self.password = password
         self.verify_ssl = verify_ssl
         self.auto_renew_token = auto_renew_token
+        self.is_available = False
 
         #AUTO-GENERATE TOKEN if not provided but username/password are
         if not self.auth_token and self.username and self.password:
@@ -48,13 +48,21 @@ class ArgoCDService:
                     f"Could not generate ArgoCD token: {e}"
                 )
         
-        self.client = ArgoCDClient(
-            server_url=server_url,
-            auth_token=auth_token,
-            username=username,
-            password=password,
-            verify_ssl=verify_ssl
-        )
+        # Initialize client
+        try:
+            self.client = ArgoCDClient(
+                server_url=server_url,
+                auth_token=self.auth_token,  # Use instance variable (may have been generated)
+                username=username,
+                password=password,
+                verify_ssl=verify_ssl
+            )
+            self.is_available = True
+        except Exception as e:
+            logger.error(f"Failed to initialize ArgoCD client: {e}")
+            self.is_available = False
+            self.client = None
+
     
     def _execute_with_retry(self, func, *args, **kwargs):
         """Execute function with automatic token renewal on expiry"""
@@ -95,7 +103,7 @@ class ArgoCDService:
             except Exception as renewal_error:
                 logger.error(f"Failed to renew token: {renewal_error}")
                 raise
-    
+            
     # ==================== Application Operations ====================
     
     def list_applications(
@@ -216,17 +224,94 @@ class ArgoCDService:
         revision: Optional[str] = None,
         prune: bool = False,
         dry_run: bool = False,
-        resources: Optional[List[Dict]] = None
-    ) -> Dict[str, Any]:
-        """Sync an application"""
-        return self._execute_with_retry(
-            self.client.sync_application,
-            app_name,
-            revision,
-            prune,
-            dry_run,
-            resources
-        )
+        resources: Optional[List[Dict]] = None,
+        wait_for_completion: bool = False,
+        timeout: int = 300,
+        return_simple: bool = False
+    ) -> Union[Dict[str, Any], Tuple[bool, Optional[str]]]:
+        """
+        Sync an application
+        
+        Args:
+            app_name: Application name
+            revision: Specific revision to sync (optional)
+            prune: Prune resources
+            dry_run: Dry run mode
+            resources: Specific resources to sync
+            wait_for_completion: Wait until sync completes and app is healthy
+            timeout: Timeout in seconds for wait_for_completion
+            return_simple: Return (success, error_message) tuple instead of full dict
+            
+        Returns:
+            Dict with sync result OR Tuple(success, error) if return_simple=True
+        """
+        try:
+            # Perform sync
+            logger.info(f"Syncing ArgoCD application: {app_name}")
+            sync_result = self._execute_with_retry(
+                self.client.sync_application,
+                app_name,
+                revision,
+                prune,
+                dry_run,
+                resources
+            )
+            
+            logger.info(f"Sync initiated for {app_name}")
+            
+            # Wait for completion if requested
+            if wait_for_completion:
+                logger.info(f"Waiting for sync to complete (timeout: {timeout}s)...")
+                
+                start_time = time.time()
+                while time.time() - start_time < timeout:
+                    status = self.get_application_status(app_name)
+                    
+                    sync_status = status.get('sync', {}).get('status')
+                    health_status = status.get('health', {}).get('status')
+                    
+                    logger.debug(f"Status: sync={sync_status}, health={health_status}")
+                    
+                    if sync_status == 'Synced' and health_status == 'Healthy':
+                        logger.info(f"✅ Application {app_name} synced and healthy")
+                        if return_simple:
+                            return True, None
+                        return sync_result
+                    
+                    if health_status == 'Degraded':
+                        error_msg = f"Application {app_name} is degraded"
+                        logger.warning(error_msg)
+                        if return_simple:
+                            return False, error_msg
+                        return sync_result
+                    
+                    time.sleep(5)  # Check every 5 seconds
+                
+                # Timeout reached
+                logger.warning(f"Sync timeout reached for {app_name}")
+                if return_simple:
+                    return False, f"Sync timeout after {timeout} seconds"
+                return sync_result
+            
+            logger.info(f"✅ ArgoCD application {app_name} synced successfully")
+            
+            if return_simple:
+                return True, None
+            
+            return sync_result
+            
+        except ApplicationNotFoundException as e:
+            error_msg = f"Application not found: {str(e)}"
+            logger.error(error_msg)
+            if return_simple:
+                return False, error_msg
+            raise
+        except Exception as e:
+            error_msg = f"Failed to sync ArgoCD application: {str(e)}"
+            logger.error(error_msg)
+            if return_simple:
+                return False, error_msg
+            raise
     
     def rollback_application(
         self,
@@ -475,3 +560,6 @@ class ArgoCDService:
         token = self.generate_token(server_url, username, password, verify_ssl)
         
         return token
+    
+    
+    

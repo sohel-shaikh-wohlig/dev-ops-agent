@@ -47,6 +47,10 @@ def get_argocd_service(
         auto_renew_token=settings.AUTO_RENEW_TOKEN
     )
 
+def is_argocd_available() -> bool:
+        """Check if ArgoCD service is available"""
+        service = get_argocd_service()
+        return service is not None and service.is_available
 
 def get_settings_dependency() -> Settings:
     """Dependency to get settings"""

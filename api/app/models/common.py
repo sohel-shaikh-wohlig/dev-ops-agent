@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional
-
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -36,11 +36,71 @@ class BaseResponse(BaseModel):
 
 
 class ErrorResponse(BaseModel):
-    """Error response model"""
-    status: ResponseStatus = ResponseStatus.ERROR
-    message: str
-    detail: Optional[str] = None
-    error_code: Optional[str] = None
+    """
+    Response model for errors
+    
+    Provides detailed error information for debugging and user feedback.
+    """
+    status: str = Field(
+        default="error",
+        description="Error status",
+        example="error"
+    )
+    
+    error: str = Field(
+        ...,
+        description="Error type/category",
+        example="ValidationError"
+    )
+    
+    message: str = Field(
+        ...,
+        description="Human-readable error message",
+        example="Invalid GitOps repository URL"
+    )
+    
+    detail: Optional[str] = Field(
+        None,
+        description="Detailed error information",
+        example="GitOps URL must start with http://, https://, or git@"
+    )
+    
+    field: Optional[str] = Field(
+        None,
+        description="Field that caused the error (for validation errors)",
+        example="gitops_url"
+    )
+    
+    code: Optional[str] = Field(
+        None,
+        description="Error code for programmatic handling",
+        example="INVALID_URL_FORMAT"
+    )
+    
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp when error occurred"
+    )
+    
+    request_id: Optional[str] = Field(
+        None,
+        description="Request ID for tracking",
+        example="req_abc123"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status": "error",
+                "error": "ValidationError",
+                "message": "Invalid GitOps repository URL",
+                "detail": "GitOps URL must start with http://, https://, or git@. Got: invalid-url",
+                "field": "gitops_url",
+                "code": "INVALID_URL_FORMAT",
+                "timestamp": "2026-01-19T10:30:00.000000",
+                "request_id": "req_abc123def456"
+            }
+        }    
 
 
 class PaginationParams(BaseModel):
@@ -83,7 +143,24 @@ class SyncPolicyModel(BaseModel):
     class Config:
         populate_by_name = True
 
+# ========================================
+# Enums
+# ========================================
 class RepositoryType(str, Enum):
     """Repository type"""
     GIT = "git"
     HELM = "helm"
+
+class EnvironmentType(str, Enum):
+    """Supported environment types"""
+    DEVELOPMENT = "development"
+    STAGING = "staging"
+    PRODUCTION = "production"
+    QA = "qa"
+    UAT = "uat"
+
+
+class ChangeType(str, Enum):
+    """Type of configuration change"""
+    ADD = "ADD"
+    UPDATE = "UPDATE"

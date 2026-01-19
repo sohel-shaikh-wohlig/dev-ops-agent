@@ -1,6 +1,7 @@
 """
 Main FastAPI Application
 """
+
 import uvicorn
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,8 +12,9 @@ from contextlib import asynccontextmanager
 
 from app.core.config import get_settings
 from app.core.logging_config import setup_logging
-from app.routes import argocd, routes
+from app.routes import argocd, routes, configmap
 from app.utils.cleanup import cleanup_old_sessions
+
 
 # Setup logging
 logger = setup_logging()
@@ -29,6 +31,8 @@ async def lifespan(app: FastAPI):
     logger.info("Starting DevOps Automation API")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
 
+    settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    
     yield
     
     # Shutdown
@@ -88,6 +92,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Include routers
 app.include_router(routes.router, prefix="/api")
 app.include_router(argocd.router, prefix="/api")
+app.include_router(configmap.router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_event():
