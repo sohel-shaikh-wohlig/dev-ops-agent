@@ -12,7 +12,7 @@ function App() {
       <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
         <div className="flex h-screen bg-background text-foreground">
           <Sidebar />
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-auto">
             <Routes>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/argocd" element={<ArgoCDPage />} />
