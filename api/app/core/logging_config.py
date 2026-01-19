@@ -14,14 +14,19 @@ def setup_logging() -> logging.Logger:
     """
     # Get settings
     settings = get_settings()
-    
+
     # Create logger
     logger = logging.getLogger("devops_api")
+
+    # Prevent adding duplicate handlers if already configured
+    if logger.handlers:
+        return logger
+
     logger.setLevel(getattr(logging, settings.LOG_LEVEL))
-    
+
     # Create formatters
     formatter = logging.Formatter(settings.LOG_FORMAT)
-    
+
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)

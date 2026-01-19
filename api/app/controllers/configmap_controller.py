@@ -6,7 +6,7 @@ Maps to the original script's main() function and workflow
 import uuid
 from pathlib import Path
 from typing import Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.models.configmap import (
     ConfigMapUpdateRequest,
@@ -148,8 +148,9 @@ class ConfigMapController:
                     if not success:
                         raise Exception(f"Failed to add changes: {error}")
                     
-                    # Commit changes
-                    commit_msg = f"Updated config for {request.microservice_name} in {request.environment_name}"
+                    # Commit changes - use .value for enum to get string like "development"
+                    env_name = request.environment_name.value if hasattr(request.environment_name, 'value') else str(request.environment_name)
+                    commit_msg = f"Updated config for {request.microservice_name} in {env_name}"
                     success, error, commit_hash = git_service.commit_changes(
                         git_root,
                         commit_msg
@@ -169,8 +170,8 @@ class ConfigMapController:
                     logger.info("✅ Changes pushed to GitHub successfully!")
             
             # Step 7: ArgoCD sync (if auto_sync_argocd enabled)
-            if request.auto_sync_argocd and request.git_committed:
-                if argocd_service.is_available():
+            if request.auto_sync_argocd and response_data['git_committed']:
+                if argocd_service.is_available:
                     logger.info("Step 7: Syncing ArgoCD application...")
                     
                     
@@ -272,8 +273,10 @@ class ConfigMapController:
                 'changes': changes,
                 'created_at': datetime.utcnow()
             }
-            
+
             logger.info(f"Preview generated: {len(changes)} changes")
+            logger.info(f"Stored preview session: {preview_id}")
+            logger.info(f"Active sessions: {list(self.preview_sessions.keys())}")
             
             return ConfigMapPreviewResponse(
                 status='success',
@@ -307,13 +310,30 @@ class ConfigMapController:
             GitOpsUpdateResponse with results
         """
         # Get preview session
-        preview_session = self.preview_sessions.get(request.preview_id)
+        logger.info(f"Looking for session: {request.session_id}")
+        logger.info(f"Available sessions: {list(self.preview_sessions.keys())}")
+        preview_session = self.preview_sessions.get(request.session_id)
         if not preview_session:
-            raise ValueError(f"Preview session {request.preview_id} not found or expired")
+            raise ValueError(
+                f"Preview session {request.session_id} not found or expired. "
+                f"Note: Sessions are stored in memory and lost on server restart. "
+                f"Please create a new preview."
+            )
+
+        # Check if session has expired
+        session_ttl = timedelta(minutes=settings.PREVIEW_SESSION_TTL_MINUTES)
+        if datetime.utcnow() - preview_session['created_at'] > session_ttl:
+            # Clean up expired session
+            del self.preview_sessions[request.session_id]
+            raise ValueError(
+                f"Preview session {request.session_id} has expired "
+                f"(TTL: {settings.PREVIEW_SESSION_TTL_MINUTES} minutes). "
+                f"Please create a new preview."
+            )
         
         try:
             logger.info(f"=== Applying Previewed Changes ===")
-            logger.info(f"Preview ID: {request.preview_id}")
+            logger.info(f"Session ID: {request.session_id}")
             
             microservice_path = preview_session['microservice_path']
             env_vars = preview_session['env_vars']
@@ -368,16 +388,15 @@ class ConfigMapController:
                         response_data['git_commit_hash'] = commit_hash
                         git_service.push_changes(git_root)
             
-            # ArgoCD sync if requested
-            if request.auto_sync_argocd and response_data['git_committed']:
-                if argocd_service.is_available():
-                    # Note: ArgoCD app name would need to be stored in preview session
-                    pass  # Implement if needed
-            
+            # ArgoCD sync not supported in apply - use /update endpoint for full workflow
+            if request.auto_sync_argocd:
+                logger.warning("ArgoCD sync not supported in apply endpoint. Use /update for full workflow.")
+                response_data['message'] += " (ArgoCD sync skipped - use /update endpoint for full workflow)"
+
             # Cleanup
             repo_dir = preview_session['repo_dir']
             git_service.cleanup_repository(repo_dir.parent)
-            del self.preview_sessions[request.preview_id]
+            del self.preview_sessions[request.session_id]
             
             return ConfigMapUpdateResponse(**response_data)
             

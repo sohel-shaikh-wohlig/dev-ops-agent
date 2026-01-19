@@ -20,7 +20,7 @@ from app.models.common import ErrorResponse
 from app.services.argocd_service import ArgoCDService
 from app.core.logging_config import logger
 
-router = APIRouter(prefix="/configmap", tags=["GitOps Configuration"])
+router = APIRouter(prefix="/configmap", tags=["ConfigMap Configuration"])
 
 
 @router.post(
@@ -68,10 +68,10 @@ async def update_gitops_configuration(
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"GitOps update failed: {str(e)}", exc_info=True)
+        logger.error(f"ConfigMap update failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"GitOps configuration update failed: {str(e)}"
+            detail=f"ConfigMap configuration update failed: {str(e)}"
         )
 
 
@@ -118,18 +118,18 @@ async def preview_configuration_changes(request: ConfigMapPreviewRequest):
     summary="Apply Previewed Changes",
     description="Apply changes from a preview session"
 )
-async def apply_previewed_changes(request: ConfigMapUpdateRequest):
+async def apply_previewed_changes(request: ConfigMapApplyChangesRequest):
     """
     **Apply Previously Previewed Changes**
-    
+
     Applies changes from a preview session.
     """
     try:
-        logger.info(f"Received apply request for preview: {request.preview_id}")
-        
+        logger.info(f"Received apply request for session: {request.session_id}")
+
         result = configmap_controller.apply_previewed_changes(request)
-        
-        logger.info(f"Changes applied successfully for preview: {request.preview_id}")
+
+        logger.info(f"Changes applied successfully for session: {request.session_id}")
         return result
         
     except ValueError as e:

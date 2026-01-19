@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 from typing import Optional, Tuple, List
 from app.core.logging_config import logger
+from app.core.config import get_settings
 
 
 class GitUtilitiesService:
@@ -20,7 +21,7 @@ class GitUtilitiesService:
     def clone_repository(
         git_url: str,
         target_dir: Path,
-        branch: str = "main",
+        branch: str = "dev",
         depth: int = 1
     ) -> Tuple[bool, Optional[str]]:
         """
@@ -134,7 +135,11 @@ class GitUtilitiesService:
             return True, None
             
         except subprocess.CalledProcessError as e:
-            error_msg = f"Git command failed: git {' '.join(args)}\nError: {e.stderr}"
+            # Capture both stdout and stderr for better error reporting
+            error_details = e.stderr.strip() if e.stderr else ""
+            stdout_details = e.stdout.strip() if e.stdout else ""
+            combined_output = error_details or stdout_details or "No error details available"
+            error_msg = f"Git command failed: git {' '.join(args)}\nError: {combined_output}"
             logger.error(error_msg)
             return False, error_msg
         except subprocess.TimeoutExpired:
@@ -184,26 +189,65 @@ class GitUtilitiesService:
     @staticmethod
     def commit_changes(
         repo_dir: Path,
-        commit_message: str
+        commit_message: str,
+        author_name: Optional[str] = None,
+        author_email: Optional[str] = None
     ) -> Tuple[bool, Optional[str], Optional[str]]:
         """
         Commit changes to repository
-        
+
         Args:
             repo_dir: Repository directory
             commit_message: Commit message
-            
+            author_name: Git author name (defaults to env GIT_USER_NAME)
+            author_email: Git author email (defaults to env GIT_USER_EMAIL)
+
         Returns:
             Tuple of (success, error_message, commit_hash)
         """
+        settings = get_settings()
+
+        # Use provided values or fall back to settings
+        git_user_name = author_name or settings.GIT_USER_NAME
+        git_user_email = author_email or settings.GIT_USER_EMAIL
+
         logger.info(f"Committing changes with message: {commit_message}")
-        
+
+        # Configure git user for this repository
+        GitUtilitiesService.run_git_command(
+            ['config', 'user.name', git_user_name],
+            repo_dir
+        )
+        GitUtilitiesService.run_git_command(
+            ['config', 'user.email', git_user_email],
+            repo_dir
+        )
+
+        # Check if there are staged changes before committing
+        try:
+            status_result = subprocess.run(
+                ['git', 'diff', '--cached', '--quiet'],
+                cwd=repo_dir,
+                capture_output=True,
+                text=True
+            )
+            if status_result.returncode == 0:
+                # No staged changes
+                logger.warning("No changes to commit - files may already be up to date")
+                return True, None, None  # Return success with no commit hash
+        except Exception as e:
+            logger.warning(f"Could not check staged changes: {e}")
+
         success, error = GitUtilitiesService.run_git_command(
             ['commit', '-m', commit_message],
             repo_dir
         )
-        
+
         if not success:
+            # Check if it's a "nothing to commit" error
+            if error and ("nothing to commit" in error.lower() or "no changes" in error.lower()):
+                logger.info("No changes to commit - working tree clean")
+                return True, None, None
             return False, error, None
         
         # Get commit hash
