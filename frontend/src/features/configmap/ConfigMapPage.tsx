@@ -49,7 +49,7 @@ export function ConfigMapPage() {
     defaultValues: {
       environment: "development",
       microserviceName: "",
-      repoUrl: "",
+      repoUrl: "https://github.com/allvest-wm/git-ops.git",
       gitRepoName: "",
       argoAppName: "",
       autoSync: false,
@@ -358,7 +358,10 @@ export function ConfigMapPage() {
               selector={(state) => state.errors}
               children={(errors) =>
                 errors.length > 0 ? (
-                  <Alert variant="destructive">
+                  <Alert
+                    variant="destructive"
+                    className="bg-red-500/10 text-red-600 dark:text-red-400 [&>svg]:text-red-600 dark:[&>svg]:text-red-400 border-red-500/50"
+                  >
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Validation Error</AlertTitle>
                     <AlertDescription>

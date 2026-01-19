@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { DashboardPage } from "@/features/dashboard";
 import { ArgoCDPage } from "@/features/argocd";
 import { ConfigMapPage } from "@/features/configmap";
+import { GitOpsPage } from "@/features/gitops";
 
 function App() {
   return (
@@ -12,11 +13,12 @@ function App() {
       <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
         <div className="flex h-screen bg-background text-foreground">
           <Sidebar />
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-auto">
             <Routes>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/argocd" element={<ArgoCDPage />} />
               <Route path="/configmap" element={<ConfigMapPage />} />
+              <Route path="/gitops" element={<GitOpsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

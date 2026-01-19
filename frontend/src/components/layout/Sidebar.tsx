@@ -1,4 +1,4 @@
-import { Server, PieChart, File as FileIcon } from "lucide-react";
+import { Server, PieChart, File as FileIcon, GitGraph } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { NavLink } from "react-router-dom";
@@ -7,6 +7,7 @@ const navItems = [
   { name: "Dashboard", icon: PieChart, href: "/" },
   { name: "ArgoCD", icon: Server, href: "/argocd" },
   { name: "ConfigMap", icon: FileIcon, href: "/configmap" },
+  { name: "GitOps", icon: GitGraph, href: "/gitops" },
 ];
 
 export function Sidebar() {
