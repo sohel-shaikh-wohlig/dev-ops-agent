@@ -18,4 +18,4 @@ service:
 virtualhost:
   fqdn: {{DOMAIN_NAME}}
 config:
-  
+{{ENVIRONMENT_VARIABLES_YAML}}

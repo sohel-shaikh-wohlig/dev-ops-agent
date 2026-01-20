@@ -3,3 +3,4 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.name }}
 data:
+{{ENVIRONMENT_VARIABLES_CONFIGMAP}}

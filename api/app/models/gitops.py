@@ -3,17 +3,11 @@ GitOps Manifest Generation Models
 Request/Response models for GitOps template processing
 """
 
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field, validator
 
 from app.models.common import EnvironmentType
-
-
-class EnvironmentVariable(BaseModel):
-    """Single environment variable"""
-    name: str = Field(..., description="Variable name")
-    value: str = Field(..., description="Variable value")
 
 
 class GitOpsManifestRequest(BaseModel):
@@ -91,10 +85,12 @@ class GitOpsManifestRequest(BaseModel):
         example="api.example.com"
     )
 
-    environment_variables: Union[List[EnvironmentVariable], Dict[str, str]] = Field(
-        default_factory=list,
-        alias="environmentVariables",
-        description="Environment variables as list of objects or key-value dict"
+    env_content: Optional[str] = Field(
+        default=None,
+        alias="envContent",
+        description="Content of .env file with KEY=VALUE pairs (one per line). "
+                    "Same format as /configmap/update endpoint.",
+        example="LOG_LEVEL=debug\nNODE_ENV=development\nDATABASE_URL=postgresql://localhost:5432/db"
     )
 
     @validator('microservice_name')
@@ -117,12 +113,23 @@ class GitOpsManifestRequest(BaseModel):
             raise ValueError("GitOps URL must start with http://, https://, or git@")
         return v
 
-    @validator('environment_variables', pre=True)
-    def normalize_env_vars(cls, v):
-        """Convert dict to list of EnvironmentVariable if needed"""
-        if isinstance(v, dict):
-            return [{"name": k, "value": str(val)} for k, val in v.items()]
-        return v
+    @validator('env_content')
+    def validate_env_content(cls, v):
+        """Validate environment content format (same as ConfigMap)"""
+        if v is None or not v.strip():
+            return None
+
+        # Check that at least one KEY=VALUE pair exists
+        lines = [line.strip() for line in v.strip().split('\n')]
+        valid_lines = [line for line in lines if line and not line.startswith('#') and '=' in line]
+
+        if v.strip() and not valid_lines:
+            raise ValueError(
+                "Environment content must contain at least one valid KEY=VALUE pair. "
+                "Lines should be in format: KEY=VALUE"
+            )
+
+        return v.strip()
 
     class Config:
         populate_by_name = True
@@ -137,10 +144,7 @@ class GitOpsManifestRequest(BaseModel):
                 "gitBranch": "main",
                 "argoCdAppName": "user-service-dev",
                 "domainName": "api.example.com",
-                "environmentVariables": [
-                    {"name": "LOG_LEVEL", "value": "debug"},
-                    {"name": "NODE_ENV", "value": "development"}
-                ]
+                "envContent": "LOG_LEVEL=debug\nNODE_ENV=development\nDATABASE_URL=postgresql://localhost:5432/db"
             }
         }
 
@@ -194,6 +198,11 @@ class GitOpsManifestResponse(BaseModel):
     template_variables: Dict[str, str] = Field(
         default_factory=dict,
         description="Variables used for substitution"
+    )
+
+    environment_variables: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Parsed environment variables from env_content"
     )
 
     timestamp: datetime = Field(

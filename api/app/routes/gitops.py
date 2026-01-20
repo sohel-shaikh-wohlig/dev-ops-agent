@@ -47,12 +47,24 @@ async def generate_microservice_manifests(request: GitOpsManifestRequest):
        - `{{GIT_BRANCH}}` → gitBranch
        - `{{ARGOCD_APP_NAME}}` → argoCdAppName
        - `{{GITOPS_REPO_URL}}` → gitOpsRepoUrl
+       - `{{ENVIRONMENT_VARIABLES_YAML}}` → formatted env vars for values.yaml
+       - `{{ENVIRONMENT_VARIABLES_CONFIGMAP}}` → formatted env vars for ConfigMap
+       - `{{KEY}}` → individual env var values (e.g., `{{LOG_LEVEL}}`)
     4. Save processed files maintaining original folder structure
+
+    **Environment Variables (envContent):**
+    Pass environment variables as KEY=VALUE pairs (same format as /configmap/update):
+    ```
+    LOG_LEVEL=debug
+    NODE_ENV=development
+    DATABASE_URL=postgresql://localhost:5432/db
+    ```
 
     **Returns:**
     - List of processed files with replacement counts
     - Output directory path
     - Template variables used
+    - Parsed environment variables
     """
     try:
         logger.info(f"Received manifest generation request for {request.microservice_name}")

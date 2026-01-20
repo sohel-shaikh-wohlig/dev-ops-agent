@@ -29,6 +29,9 @@ class GitOpsTemplateService:
     PLACEHOLDER_GIT_BRANCH = "{{GIT_BRANCH}}"
     PLACEHOLDER_ARGOCD_APP_NAME = "{{ARGOCD_APP_NAME}}"
     PLACEHOLDER_GITOPS_REPO_URL = "{{GITOPS_REPO_URL}}"
+    PLACEHOLDER_ENVIRONMENT_VARIABLES = "{{ENVIRONMENT_VARIABLES}}"
+    PLACEHOLDER_ENVIRONMENT_VARIABLES_YAML = "{{ENVIRONMENT_VARIABLES_YAML}}"
+    PLACEHOLDER_ENVIRONMENT_VARIABLES_CONFIGMAP = "{{ENVIRONMENT_VARIABLES_CONFIGMAP}}"
 
     def __init__(
         self,
@@ -92,6 +95,116 @@ class GitOpsTemplateService:
         logger.info(f"Found {len(files)} template files")
         return files
 
+    def parse_env_content(self, env_content: Optional[str]) -> Dict[str, str]:
+        """
+        Parse environment variables from .env file content
+        (Same logic as ConfigMapService.parse_env_content)
+
+        Args:
+            env_content: Content of .env file as string (KEY=VALUE pairs)
+
+        Returns:
+            Dictionary of environment variables
+        """
+        if not env_content:
+            return {}
+
+        env_vars = {}
+
+        for line_num, line in enumerate(env_content.split('\n'), 1):
+            line = line.strip()
+
+            # Skip empty lines and comments
+            if not line or line.startswith('#'):
+                continue
+
+            # Parse KEY=VALUE
+            if '=' in line:
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+
+                # Remove quotes if present
+                if (value.startswith('"') and value.endswith('"')) or \
+                   (value.startswith("'") and value.endswith("'")):
+                    value = value[1:-1]
+
+                env_vars[key] = value
+                logger.debug(f"Parsed env var: {key}={value}")
+            else:
+                logger.warning(f"Skipping invalid line {line_num}: {line}")
+
+        logger.info(f"Loaded {len(env_vars)} variables from env content")
+        return env_vars
+
+    def format_env_vars_yaml(self, env_vars: Dict[str, str], indent: int = 2) -> str:
+        """
+        Format environment variables as YAML key-value pairs
+
+        Args:
+            env_vars: Dictionary of environment variables
+            indent: Number of spaces for indentation
+
+        Returns:
+            YAML formatted string
+        """
+        if not env_vars:
+            return ""
+
+        indent_str = " " * indent
+        lines = []
+        for key, value in env_vars.items():
+            # Quote values that need it
+            if any(c in str(value) for c in [' ', ':', '#', '{', '}', '[', ']', ',', '&', '*', '?', '|', '-', '<', '>', '=', '!', '%', '@', '`']):
+                value = f'"{value}"'
+            lines.append(f"{indent_str}{key}: {value}")
+
+        return '\n'.join(lines)
+
+    def format_env_vars_configmap(self, env_vars: Dict[str, str], indent: int = 2) -> str:
+        """
+        Format environment variables for Kubernetes ConfigMap data section
+
+        Args:
+            env_vars: Dictionary of environment variables
+            indent: Number of spaces for indentation
+
+        Returns:
+            ConfigMap data section formatted string
+        """
+        if not env_vars:
+            return ""
+
+        indent_str = " " * indent
+        lines = []
+        for key, value in env_vars.items():
+            # Use Helm template syntax for ConfigMap
+            lines.append(f"{indent_str}{key}: {{{{ .Values.config.{key} | quote }}}}")
+
+        return '\n'.join(lines)
+
+    def format_env_vars_values_yaml(self, env_vars: Dict[str, str], indent: int = 2) -> str:
+        """
+        Format environment variables for values.yaml config section
+
+        Args:
+            env_vars: Dictionary of environment variables
+            indent: Number of spaces for indentation
+
+        Returns:
+            values.yaml config section formatted string
+        """
+        if not env_vars:
+            return ""
+
+        indent_str = " " * indent
+        lines = []
+        for key, value in env_vars.items():
+            # Quote string values
+            lines.append(f"{indent_str}{key}: \"{value}\"")
+
+        return '\n'.join(lines)
+
     def build_replacement_map(
         self,
         microservice_name: str,
@@ -103,8 +216,8 @@ class GitOpsTemplateService:
         git_branch: str,
         argocd_app_name: str,
         gitops_repo_url: str,
-        environment_variables: Optional[List[Dict[str, str]]] = None
-    ) -> Dict[str, str]:
+        env_content: Optional[str] = None
+    ) -> Tuple[Dict[str, str], Dict[str, str]]:
         """
         Build the replacement map for template processing
 
@@ -118,11 +231,14 @@ class GitOpsTemplateService:
             git_branch: Git branch
             argocd_app_name: ArgoCD application name
             gitops_repo_url: GitOps repository URL
-            environment_variables: Optional list of additional env vars
+            env_content: Optional .env file content (KEY=VALUE pairs)
 
         Returns:
-            Dictionary mapping placeholders to values
+            Tuple of (replacements dict, parsed env_vars dict)
         """
+        # Parse environment variables from env_content (same as ConfigMap)
+        env_vars = self.parse_env_content(env_content)
+
         replacements = {
             self.PLACEHOLDER_MICROSERVICE_NAME: microservice_name,
             self.PLACEHOLDER_MICROSERVICE_URL: microservice_url,
@@ -135,14 +251,23 @@ class GitOpsTemplateService:
             self.PLACEHOLDER_GITOPS_REPO_URL: gitops_repo_url,
         }
 
-        # Add custom environment variables as placeholders
-        if environment_variables:
-            for env_var in environment_variables:
-                placeholder = f"{{{{{env_var['name']}}}}}"
-                replacements[placeholder] = env_var['value']
+        # Add environment variable formatted placeholders
+        if env_vars:
+            # YAML format for values.yaml config section
+            replacements[self.PLACEHOLDER_ENVIRONMENT_VARIABLES_YAML] = self.format_env_vars_values_yaml(env_vars)
+            # ConfigMap template format
+            replacements[self.PLACEHOLDER_ENVIRONMENT_VARIABLES_CONFIGMAP] = self.format_env_vars_configmap(env_vars)
+            # Simple YAML format
+            replacements[self.PLACEHOLDER_ENVIRONMENT_VARIABLES] = self.format_env_vars_yaml(env_vars)
+
+            # Also add individual env vars as placeholders (e.g., {{LOG_LEVEL}})
+            for key, value in env_vars.items():
+                placeholder = f"{{{{{key}}}}}"
+                replacements[placeholder] = value
 
         logger.info(f"Built replacement map with {len(replacements)} variables")
-        return replacements
+        logger.info(f"Parsed {len(env_vars)} environment variables from env_content")
+        return replacements, env_vars
 
     def process_file_content(
         self,
@@ -182,7 +307,7 @@ class GitOpsTemplateService:
         git_branch: str,
         argocd_app_name: str,
         gitops_repo_url: str,
-        environment_variables: Optional[List[Dict[str, str]]] = None
+        env_content: Optional[str] = None
     ) -> Dict:
         """
         Process all template files with variable substitution
@@ -197,7 +322,7 @@ class GitOpsTemplateService:
             git_branch: Git branch
             argocd_app_name: ArgoCD application name
             gitops_repo_url: GitOps repository URL
-            environment_variables: Optional list of additional env vars
+            env_content: Optional .env file content (KEY=VALUE pairs, same as ConfigMap)
 
         Returns:
             Dictionary with processing results
@@ -221,7 +346,7 @@ class GitOpsTemplateService:
         logger.info(f"Created output directory: {output_dir}")
 
         # Build replacement map
-        replacements = self.build_replacement_map(
+        replacements, env_vars = self.build_replacement_map(
             microservice_name=microservice_name,
             microservice_url=microservice_url,
             container_port=container_port,
@@ -231,7 +356,7 @@ class GitOpsTemplateService:
             git_branch=git_branch,
             argocd_app_name=argocd_app_name,
             gitops_repo_url=gitops_repo_url,
-            environment_variables=environment_variables
+            env_content=env_content
         )
 
         # Get template files
@@ -290,13 +415,20 @@ class GitOpsTemplateService:
         readable_replacements = {
             k.replace("{{", "").replace("}}", ""): v
             for k, v in replacements.items()
+            # Exclude the formatted env var blocks from the simple variables list
+            if k not in [
+                self.PLACEHOLDER_ENVIRONMENT_VARIABLES,
+                self.PLACEHOLDER_ENVIRONMENT_VARIABLES_YAML,
+                self.PLACEHOLDER_ENVIRONMENT_VARIABLES_CONFIGMAP
+            ]
         }
 
         return {
             'output_directory': str(output_dir),
             'processed_files': processed_files,
             'total_files_processed': len(processed_files),
-            'template_variables': readable_replacements
+            'template_variables': readable_replacements,
+            'environment_variables': env_vars
         }
 
     def cleanup_output(self, microservice_name: str) -> None:

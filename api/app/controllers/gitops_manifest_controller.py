@@ -40,20 +40,14 @@ class GitOpsManifestController:
         logger.info(f"=== Starting Manifest Generation ===")
         logger.info(f"Microservice: {request.microservice_name}")
         logger.info(f"Environment: {request.environment}")
+        if request.env_content:
+            logger.info(f"Environment variables provided via env_content")
 
         try:
-            # Convert environment variables to list of dicts if needed
-            env_vars = None
-            if request.environment_variables:
-                env_vars = [
-                    {"name": ev.name, "value": ev.value}
-                    for ev in request.environment_variables
-                ]
-
             # Get environment value as string
             env_value = request.environment.value if hasattr(request.environment, 'value') else str(request.environment)
 
-            # Process templates
+            # Process templates with env_content (same format as ConfigMap)
             result = self.template_service.process_template(
                 microservice_name=request.microservice_name,
                 microservice_url=request.microservice_url,
@@ -64,7 +58,7 @@ class GitOpsManifestController:
                 git_branch=request.git_branch,
                 argocd_app_name=request.argocd_app_name,
                 gitops_repo_url=request.gitops_repo_url,
-                environment_variables=env_vars
+                env_content=request.env_content
             )
 
             # Build response
@@ -85,7 +79,8 @@ class GitOpsManifestController:
                 output_directory=result['output_directory'],
                 processed_files=processed_files,
                 total_files_processed=result['total_files_processed'],
-                template_variables=result['template_variables']
+                template_variables=result['template_variables'],
+                environment_variables=result.get('environment_variables', {})
             )
 
             logger.info(f"=== Manifest Generation Complete ===")
