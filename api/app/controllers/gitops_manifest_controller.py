@@ -222,6 +222,71 @@ class GitOpsManifestController:
 
                 logger.info("Changes pushed to remote repository successfully!")
 
+            # Step 9: Clone microservice repo for GitHub workflows
+            logger.info("Step 9: Cloning microservice repository for GitHub workflows...")
+            microservice_repo_dir = project_root / "app" / "temp" / self.template_service.session_id / "microservice-repo"
+            success, error = git_service.clone_repository(
+                request.microservice_url,
+                microservice_repo_dir,
+                branch=env_value
+            )
+
+            if not success:
+                raise Exception(f"Failed to clone microservice repository: {error}")
+
+            logger.info(f"Microservice repository cloned to: {microservice_repo_dir}")
+
+            # Step 10: Create .github/workflows folder and move workflow file
+            logger.info("Step 10: Setting up GitHub workflows...")
+            workflows_dir = microservice_repo_dir / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Created workflows directory: {workflows_dir}")
+
+            # Source: temp/{session_id}/github/{microservice_name}/workflows.yaml
+            # Destination: .github/workflows/{environment}.yaml
+            source_workflow = self.template_service.output_base_dir / "github" / request.microservice_name / "workflows.yaml"
+            destination_workflow = workflows_dir / f"{env_value}.yaml"
+
+            if source_workflow.exists():
+                shutil.move(str(source_workflow), str(destination_workflow))
+                logger.info(f"Moved workflow file to: {destination_workflow}")
+            else:
+                logger.warning(f"Workflow file not found at: {source_workflow}")
+
+            # Step 11: Commit and push GitHub workflows
+            logger.info("Step 11: Committing and pushing GitHub workflows...")
+            ms_git_root = git_service.find_git_root(microservice_repo_dir)
+            if not ms_git_root:
+                raise Exception("Could not find git root in microservice repository")
+
+            success, error = git_service.add_all(ms_git_root)
+            if not success:
+                raise Exception(f"Failed to add workflow changes: {error}")
+
+            workflow_commit_msg = f"Added/Updated GitHub workflow for {env_value} environment"
+            success, error, workflow_commit_hash = git_service.commit_changes(ms_git_root, workflow_commit_msg)
+
+            if not success:
+                if "nothing to commit" in str(error).lower():
+                    logger.info("No workflow changes to commit")
+                else:
+                    raise Exception(f"Failed to commit workflow changes: {error}")
+            else:
+                logger.info(f"Workflow changes committed with hash: {workflow_commit_hash}")
+
+                success, error = git_service.push_changes(ms_git_root)
+                if not success:
+                    raise Exception(f"Failed to push workflow changes: {error}")
+
+                logger.info("GitHub workflow pushed successfully!")
+
+            # Step 12: Clean up temp folder
+            logger.info("Step 12: Cleaning up temp folder...")
+            temp_session_dir = project_root / "app" / "temp" / self.template_service.session_id
+            if temp_session_dir.exists():
+                shutil.rmtree(temp_session_dir)
+                logger.info(f"Cleaned up temp folder: {temp_session_dir}")
+
             response = GitOpsManifestResponse(
                 status="success",
                 message=f"GitOps manifests generated successfully for {request.microservice_name}",
