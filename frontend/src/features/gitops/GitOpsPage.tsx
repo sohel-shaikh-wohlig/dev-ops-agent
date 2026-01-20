@@ -23,6 +23,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, GitGraph, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+    createGitOpsMicroservice,
+    type GitOpsMicroservicePayload,
+} from "./services/gitops-service";
+import { ApiError } from "@/services/api-client";
 
 export function GitOpsPage() {
     const [isLoading, setIsLoading] = useState(false);
@@ -33,7 +38,7 @@ export function GitOpsPage() {
             microserviceName: "",
             microserviceUrl: "",
             containerPort: 3000,
-            repoUrl: "",
+            repoUrl: "https://github.com/allvest-wm/git-ops.git",
             gitRepoName: "",
             gitBranch: "dev", // Defaulting to match environment
             argoAppName: "",
@@ -81,9 +86,9 @@ export function GitOpsPage() {
                 }
 
                 // Domain Validation
-                if (!/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/.test(value.domainName) && value.domainName !== 'localhost') {
-                    return "Domain Name must be a valid domain";
-                }
+                // if (!/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/.test(value.domainName) && value.domainName !== 'localhost') {
+                //     return "Domain Name must be a valid domain";
+                // }
 
                 if (value.envContent) {
                     const lines = value.envContent.split("\n");
