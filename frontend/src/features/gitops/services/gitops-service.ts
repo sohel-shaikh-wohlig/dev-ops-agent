@@ -11,7 +11,8 @@ export interface GitOpsMicroservicePayload {
     git_branch: string;
     argocd_app_name: string;
     domain_name: string;
-    environment_variables: Array<{ name: string; value: string }>;
+    env_content: string;
+    environment_variables?: Array<{ name: string; value: string }>;
 }
 
 export interface GitOpsMicroserviceResponse {
@@ -30,5 +31,5 @@ export const createGitOpsMicroservice = async (payload: GitOpsMicroservicePayloa
     // Safest bet if the existing app uses `/configmap` is that base is `http://127.0.0.1:8000` or similar.
     // I will use `/api/gitops/micro-service` assuming the proxy or base url handles the host.
 
-    return apiClient.post<GitOpsMicroserviceResponse>('/api/gitops/micro-service', payload);
+    return apiClient.post<GitOpsMicroserviceResponse>('/gitops/micro-service', payload);
 };

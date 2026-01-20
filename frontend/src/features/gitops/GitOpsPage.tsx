@@ -30,7 +30,29 @@ import {
 import { ApiError } from "@/services/api-client";
 
 export function GitOpsPage() {
+    console.log("GitOpsPage mounting");
     const [isLoading, setIsLoading] = useState(false);
+    const [apiError, setApiError] = useState<{
+        status: string;
+        message: string;
+        detail?: {
+            loc: string[];
+            msg: string;
+            type: string;
+        }[];
+    } | null>(null);
+
+    const [manuallyEdited, setManuallyEdited] = useState<{
+        gitRepoName: boolean;
+        argoAppName: boolean;
+        domainName: boolean;
+        microserviceUrl: boolean;
+    }>({
+        gitRepoName: false,
+        argoAppName: false,
+        domainName: false,
+        microserviceUrl: false,
+    });
 
     const form = useForm({
         defaultValues: {
@@ -65,13 +87,6 @@ export function GitOpsPage() {
                     return "For 'uat' environment, Git Branch must be 'uat'";
                 }
 
-                // URL Validation
-                try {
-                    new URL(value.microserviceUrl);
-                } catch (_) {
-                    return "Microservice URL must be a valid URL";
-                }
-
                 try {
                     if (!value.repoUrl.startsWith("http") && !value.repoUrl.startsWith("git@") && !value.repoUrl.startsWith("ssh://")) {
                         return "GitOps Repo URL must be a valid URL (http, ssh, etc.)";
@@ -90,11 +105,15 @@ export function GitOpsPage() {
                 //     return "Domain Name must be a valid domain";
                 // }
 
+                if (!value.envContent) {
+                    return "Please provide .env content";
+                }
+
                 if (value.envContent) {
                     const lines = value.envContent.split("\n");
                     for (const line of lines) {
                         if (line.trim() && !/^[A-Z_0-9]+=[^\n]+$/.test(line)) {
-                            return `Invalid .env format at line: "${line}". Expected KEY=VALUE`;
+                            return `Invalid format at line: "${line}". Expected KEY=VALUE`;
                         }
                     }
                 }
@@ -104,19 +123,61 @@ export function GitOpsPage() {
         },
         onSubmit: async ({ value }) => {
             setIsLoading(true);
+            setApiError(null);
             try {
-                console.log("Submitting GitOps Config:", value);
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                // Parse environment variables
+                const envVars: { name: string; value: string }[] = [];
+                if (value.envContent) {
+                    value.envContent.split("\n").forEach(line => {
+                        const trimmed = line.trim();
+                        if (trimmed) {
+                            const [name, ...rest] = trimmed.split("=");
+                            envVars.push({ name, value: rest.join("=") });
+                        }
+                    });
+                }
+
+                const payload: GitOpsMicroservicePayload = {
+                    environment: value.environment,
+                    microservice_name: value.microserviceName,
+                    microservice_url: value.microserviceUrl,
+                    container_port: Number(value.containerPort),
+                    gitops_repo_url: value.repoUrl,
+                    git_repo_name: value.gitRepoName,
+                    git_branch: value.gitBranch,
+                    argocd_app_name: value.argoAppName,
+                    domain_name: value.domainName,
+                    env_content: value.envContent,
+                    environment_variables: envVars
+                };
+
+                await createGitOpsMicroservice(payload);
 
                 toast.success("GitOps Configuration Saved", {
                     description: "Your configuration has been successfully applied."
                 });
                 form.reset();
+                setManuallyEdited({
+                    gitRepoName: false,
+                    argoAppName: false,
+                    domainName: false,
+                    microserviceUrl: false,
+                });
             } catch (error) {
                 console.error(error);
-                toast.error("Submission Failed", {
-                    description: "Could not save configuration."
-                });
+                if (error instanceof ApiError) {
+                    if (error.data && error.data.detail) {
+                        setApiError(error.data);
+                    } else {
+                        toast.error("Submission Failed", {
+                            description: error.message
+                        });
+                    }
+                } else {
+                    toast.error("Submission Failed", {
+                        description: "Could not save configuration."
+                    });
+                }
             } finally {
                 setIsLoading(false);
             }
@@ -140,6 +201,29 @@ export function GitOpsPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
+                    {apiError && (
+                        <Alert
+                            variant="destructive"
+                            className="mb-6 bg-red-500/10 text-red-600 dark:text-red-400 [&>svg]:text-red-600 dark:[&>svg]:text-red-400 border-red-500/50"
+                        >
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertTitle>{apiError.message || "Error"}</AlertTitle>
+                            <AlertDescription>
+                                {Array.isArray(apiError.detail) ? (
+                                    <ul className="list-disc list-inside space-y-1 mt-2">
+                                        {apiError.detail.map((err, index) => (
+                                            <li key={index}>
+                                                <span className="font-semibold">{err.loc && err.loc[1] ? `${err.loc[1]}: ` : ""}</span>
+                                                {err.msg}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p>{typeof apiError.detail === 'string' ? apiError.detail : (apiError.message || "Something went wrong.")}</p>
+                                )}
+                            </AlertDescription>
+                        </Alert>
+                    )}
                     <form
                         onSubmit={(e) => {
                             e.preventDefault();
@@ -164,6 +248,17 @@ export function GitOpsPage() {
                                                 } else if (val === "uat") {
                                                     form.setFieldValue("gitBranch", "uat");
                                                 }
+
+                                                // Auto-population logic
+                                                const msName = form.getFieldValue("microserviceName");
+                                                if (msName) {
+                                                    if (!manuallyEdited.argoAppName) {
+                                                        form.setFieldValue("argoAppName", `${msName}-${val}`);
+                                                    }
+                                                    if (!manuallyEdited.domainName) {
+                                                        form.setFieldValue("domainName", `${msName}-${val}.allvestfinance.in`);
+                                                    }
+                                                }
                                             }}
                                         >
                                             <SelectTrigger>
@@ -187,7 +282,29 @@ export function GitOpsPage() {
                                         <Input
                                             id={field.name}
                                             value={field.state.value}
-                                            onChange={(e) => field.handleChange(e.target.value)}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                field.handleChange(val);
+
+                                                // Auto-population logic
+                                                const env = form.getFieldValue("environment");
+
+                                                if (!manuallyEdited.gitRepoName) {
+                                                    form.setFieldValue("gitRepoName", val);
+                                                }
+
+                                                if (!manuallyEdited.argoAppName) {
+                                                    form.setFieldValue("argoAppName", val && env ? `${val}-${env}` : "");
+                                                }
+
+                                                if (!manuallyEdited.domainName) {
+                                                    form.setFieldValue("domainName", val && env ? `${val}-${env}.allvestfinance.in` : "");
+                                                }
+
+                                                if (!manuallyEdited.microserviceUrl) {
+                                                    form.setFieldValue("microserviceUrl", val ? `https://github.com/allvest-wm/${val}.git` : "");
+                                                }
+                                            }}
                                             placeholder="e.g. user-service"
                                         />
                                     </div>
@@ -198,15 +315,35 @@ export function GitOpsPage() {
                         <div className="grid grid-cols-2 gap-4">
                             <form.Field
                                 name="microserviceUrl"
+                                validators={{
+                                    onBlur: ({ value }) => {
+                                        const gitUrlPattern = /^https:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\/.*\.git$/;
+                                        if (!value) return "Microservice URL is required";
+                                        if (!gitUrlPattern.test(value)) {
+                                            return "Please enter a valid Git repository URL (e.g. https://github.com/org/repo.git)";
+                                        }
+                                        return undefined;
+                                    }
+                                }}
                                 children={(field) => (
                                     <div className="space-y-2">
-                                        <Label htmlFor={field.name}>Microservice URL</Label>
+                                        <Label htmlFor={field.name} className={field.state.meta.errors.length ? "text-destructive" : ""}>
+                                            Microservice Git Repo URL
+                                        </Label>
                                         <Input
                                             id={field.name}
                                             value={field.state.value}
-                                            onChange={(e) => field.handleChange(e.target.value)}
-                                            placeholder="http://service-url"
+                                            onBlur={field.handleBlur}
+                                            onChange={(e) => {
+                                                field.handleChange(e.target.value);
+                                                setManuallyEdited((prev) => ({ ...prev, microserviceUrl: true }));
+                                            }}
+                                            placeholder="https://github.com/allvest-wm/service.git"
+                                            className={field.state.meta.errors.length ? "border-destructive focus-visible:ring-destructive" : ""}
                                         />
+                                        {field.state.meta.errors.length ? (
+                                            <p className="text-sm text-destructive">{field.state.meta.errors.join(", ")}</p>
+                                        ) : null}
                                     </div>
                                 )}
                             />
@@ -252,7 +389,10 @@ export function GitOpsPage() {
                                         <Input
                                             id={field.name}
                                             value={field.state.value}
-                                            onChange={(e) => field.handleChange(e.target.value)}
+                                            onChange={(e) => {
+                                                field.handleChange(e.target.value);
+                                                setManuallyEdited((prev) => ({ ...prev, gitRepoName: true }));
+                                            }}
                                             placeholder="e.g. repo-name"
                                         />
                                     </div>
@@ -271,9 +411,6 @@ export function GitOpsPage() {
                                             value={field.state.value}
                                             onChange={(e) => field.handleChange(e.target.value)}
                                             placeholder="e.g. main"
-                                        // Make it readonly if it matches stricter logic? 
-                                        // Prompt says "editable only if required". 
-                                        // I'll leave it editable but validation will catch mismatch.
                                         />
                                     </div>
                                 )}
@@ -287,7 +424,10 @@ export function GitOpsPage() {
                                         <Input
                                             id={field.name}
                                             value={field.state.value}
-                                            onChange={(e) => field.handleChange(e.target.value)}
+                                            onChange={(e) => {
+                                                field.handleChange(e.target.value);
+                                                setManuallyEdited((prev) => ({ ...prev, argoAppName: true }));
+                                            }}
                                             placeholder="e.g. user-service-dev"
                                         />
                                     </div>
@@ -303,7 +443,10 @@ export function GitOpsPage() {
                                     <Input
                                         id={field.name}
                                         value={field.state.value}
-                                        onChange={(e) => field.handleChange(e.target.value)}
+                                        onChange={(e) => {
+                                            field.handleChange(e.target.value);
+                                            setManuallyEdited((prev) => ({ ...prev, domainName: true }));
+                                        }}
                                         placeholder="e.g. api.example.com"
                                     />
                                 </div>
