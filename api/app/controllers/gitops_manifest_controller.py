@@ -14,6 +14,8 @@ from app.models.gitops import (
 from app.services.gitops_template_service import GitOpsTemplateService
 from app.services.configmap_service import ConfigMapService
 from app.services.git_service import git_service
+from app.services.argocd_service import ArgoCDService
+from app.services.cloudflare_service import CloudflareService, DNSRecordCreate
 from app.core.logging_config import logger
 from app.core.config import get_settings
 
@@ -69,15 +71,17 @@ class GitOpsManifestController:
         logger.warning(f"Microservice '{microservice_name}' not found in {repo_dir}")
         return None
 
-    def generate_manifests(
+    async def generate_manifests(
         self,
-        request: GitOpsManifestRequest
+        request: GitOpsManifestRequest,
+        argocd_service: ArgoCDService
     ) -> GitOpsManifestResponse:
         """
         Generate GitOps manifests from templates
 
         Args:
             request: GitOps manifest generation request
+            argocd_service: ArgoCD service instance
 
         Returns:
             GitOpsManifestResponse with processing results
@@ -307,6 +311,37 @@ class GitOpsManifestController:
             if temp_session_dir.exists():
                 shutil.rmtree(temp_session_dir)
                 logger.info(f"Cleaned up temp folder: {temp_session_dir}")
+
+            # Step 14: Create ArgoCD application
+            logger.info("Step 14: Creating ArgoCD application...")
+            if argocd_service.is_available:
+                argocd_result = argocd_service.create_application(
+                    name=request.microservice_name,
+                    project=env_value,
+                    repo_url=request.gitops_repo_url,
+                    path=request.microservice_name,
+                    target_revision=env_value,
+                    destination_namespace=request.argocd_app_name
+                )
+                logger.info(f"ArgoCD application created successfully: {request.microservice_name}")
+            else:
+                raise Exception("ArgoCD service is not available")
+
+            # Step 15: Create Cloudflare DNS Record
+            logger.info("Step 15: Creating Cloudflare DNS record...")
+            cloudflare_service = CloudflareService(api_token=settings.CLOUDFLARE_TOKEN)
+
+            dns_record_data = DNSRecordCreate(
+                type="A",
+                name=request.argocd_app_name,
+                content="34.180.18.42" #TODO Change value for DEV & STAGE
+            )
+
+            dns_result = await cloudflare_service.create_dns_record(
+                zone_id=settings.CLOUDFLARE_ZONE_ID,
+                record_data=dns_record_data
+            )
+            logger.info(f"Cloudflare DNS record created successfully: {request.argocd_app_name}")
 
             response = GitOpsManifestResponse(
                 status="success",

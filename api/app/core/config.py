@@ -66,6 +66,10 @@ class Settings(BaseSettings):
 
     # Preview Session Configuration
     PREVIEW_SESSION_TTL_MINUTES: int = Field(60, description="Preview session time-to-live in minutes")
+
+    # Cloudflare
+    CLOUDFLARE_TOKEN: str = Field("CLOUDFLARE_TOKEN", description="Cloudflare Token")
+    CLOUDFLARE_ZONE_ID: str = Field("CLOUDFLARE_ZONE_ID", description="Cloudflare Zone ID")
     
     @validator("ARGOCD_SERVER")
     def validate_server_url(cls, v):

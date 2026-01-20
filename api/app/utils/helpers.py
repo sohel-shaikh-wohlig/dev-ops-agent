@@ -6,62 +6,104 @@ def build_application_spec(
     name: str,
     project: str,
     repo_url: str,
-    path: str,
-    target_revision: str,
-    destination_server: str,
-    destination_namespace: str,
+    path: str = ".",
+    target_revision: str = "HEAD",
+    destination_server: str = "https://kubernetes.default.svc",
+    destination_namespace: str = "default",
     auto_sync: bool = False,
     auto_prune: bool = False,
     self_heal: bool = False,
+    auto_create_namespace: bool = True,
+    revision_history_limit: int = 10,
     chart: Optional[str] = None,
     helm_values: Optional[Dict] = None,
     labels: Optional[Dict[str, str]] = None,
     annotations: Optional[Dict[str, str]] = None
 ) -> Dict[str, Any]:
-    """Build ArgoCD application specification"""
+    """
+    Build ArgoCD application specification
     
-    spec: Dict[str, Any] = {
+    Args:
+        name: Application name
+        project: ArgoCD project name
+        repo_url: Git repository URL
+        path: Path to the application within the repository
+        target_revision: Git revision to sync to (branch, tag, or commit SHA)
+        destination_server: Kubernetes cluster server URL
+        destination_namespace: Target namespace for deployment
+        auto_sync: Enable automatic sync
+        auto_prune: Enable automatic pruning of resources
+        self_heal: Enable self-healing
+        auto_create_namespace: Automatically create namespace if it doesn't exist
+        revision_history_limit: Number of revisions to keep for rollback
+        chart: Helm chart name (for Helm applications)
+        helm_values: Helm values (for Helm applications)
+        labels: Metadata labels
+        annotations: Metadata annotations
+        
+    Returns:
+        Complete ArgoCD application specification
+    """
+    
+    # Base spec
+    spec = {
+        "apiVersion": "argoproj.io/v1alpha1",
+        "kind": "Application",
         "metadata": {
-            "name": name
+            "name": name,
+            "namespace": "argocd"  # ArgoCD namespace
         },
         "spec": {
             "project": project,
             "source": {
                 "repoURL": repo_url,
-                "path": path,
                 "targetRevision": target_revision
             },
             "destination": {
                 "server": destination_server,
                 "namespace": destination_namespace
-            }
+            },
+            "revisionHistoryLimit": revision_history_limit
         }
     }
     
-    # Add labels and annotations
+    # Add labels if provided
     if labels:
         spec["metadata"]["labels"] = labels
     
+    # Add annotations if provided
     if annotations:
         spec["metadata"]["annotations"] = annotations
     
-    # Add Helm configuration
+    # Configure source based on type
     if chart:
+        # Helm chart
         spec["spec"]["source"]["chart"] = chart
         if helm_values:
-            import json
             spec["spec"]["source"]["helm"] = {
-                "values": json.dumps(helm_values)
+                "values": helm_values
             }
+    else:
+        # Git path
+        spec["spec"]["source"]["path"] = path
     
-    # Add sync policy
+    # Configure sync policy
+    sync_policy = {}
+    
+    # Add syncOptions for auto-create namespace
+    if auto_create_namespace:
+        sync_policy["syncOptions"] = ["CreateNamespace=true"]
+    
+    # Auto sync configuration
     if auto_sync:
-        spec["spec"]["syncPolicy"] = {
-            "automated": {
-                "prune": auto_prune,
-                "selfHeal": self_heal
-            }
+        sync_policy["automated"] = {
+            "prune": auto_prune,
+            "selfHeal": self_heal
         }
+    
+    # Only add syncPolicy if it has content
+    if sync_policy:
+        spec["spec"]["syncPolicy"] = sync_policy
     
     return spec
 

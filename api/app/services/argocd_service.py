@@ -140,6 +140,8 @@ class ArgoCDService:
         auto_sync: bool = False,
         auto_prune: bool = False,
         self_heal: bool = False,
+        auto_create_namespace: bool = True,
+        revision_history_limit: int = 10,
         chart: Optional[str] = None,
         helm_values: Optional[Dict] = None,
         labels: Optional[Dict[str, str]] = None,
@@ -157,6 +159,8 @@ class ArgoCDService:
             auto_sync=auto_sync,
             auto_prune=auto_prune,
             self_heal=self_heal,
+            auto_create_namespace=auto_create_namespace,
+            revision_history_limit=revision_history_limit,
             chart=chart,
             helm_values=helm_values,
             labels=labels,
@@ -164,6 +168,7 @@ class ArgoCDService:
         )
         
         return self._execute_with_retry(self.client.create_application, app_spec)
+    
     
     def update_application(
         self,

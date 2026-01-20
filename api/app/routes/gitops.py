@@ -3,7 +3,7 @@ GitOps Routes
 FastAPI endpoints for GitOps manifest generation
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 
 from app.controllers.gitops_manifest_controller import gitops_manifest_controller
 from app.models.gitops import (
@@ -12,6 +12,8 @@ from app.models.gitops import (
 )
 from app.models.common import ErrorResponse
 from app.core.logging_config import logger
+from app.core.dependencies import get_argocd_service
+from app.services.argocd_service import ArgoCDService
 
 router = APIRouter(prefix="/gitops", tags=["GitOps Manifest Generation"])
 
@@ -27,7 +29,10 @@ router = APIRouter(prefix="/gitops", tags=["GitOps Manifest Generation"])
         500: {"model": ErrorResponse, "description": "Internal server error"}
     }
 )
-async def generate_microservice_manifests(request: GitOpsManifestRequest):
+async def generate_microservice_manifests(
+    request: GitOpsManifestRequest,
+    argocd_service: ArgoCDService = Depends(get_argocd_service)
+):
     """
     **Generate GitOps Manifests for Microservice**
 
@@ -69,7 +74,7 @@ async def generate_microservice_manifests(request: GitOpsManifestRequest):
     try:
         logger.info(f"Received manifest generation request for {request.microservice_name}")
 
-        result = gitops_manifest_controller.generate_manifests(request)
+        result = await gitops_manifest_controller.generate_manifests(request, argocd_service)
 
         logger.info(f"Manifest generation completed for {request.microservice_name}")
         return result
