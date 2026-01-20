@@ -5,6 +5,7 @@ Handles template file processing with variable substitution
 
 import os
 import shutil
+import uuid
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from app.core.logging_config import logger
@@ -43,19 +44,23 @@ class GitOpsTemplateService:
 
         Args:
             template_dir: Path to template directory (default: template/git-ops)
-            output_base_dir: Base path for output (default: temp/git-ops)
+            output_base_dir: Base path for output (default: UPLOAD_DIR/session_id/git-ops)
         """
         settings = get_settings()
+
+        # Generate session ID for unique output directory
+        self.session_id = str(uuid.uuid4())
 
         # Set default paths relative to project root
         project_root = Path(__file__).parent.parent.parent
         self.template_dir = template_dir or project_root / "app" / "templates" / "git-ops"
-        self.output_base_dir = output_base_dir or project_root / "tmp" / "git-ops"
+        self.output_base_dir = output_base_dir or project_root / "app" / "temp" / self.session_id 
 
         # Ensure output directory exists
         self.output_base_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"GitOpsTemplateService initialized")
+        logger.info(f"Session ID: {self.session_id}")
         logger.info(f"Template directory: {self.template_dir}")
         logger.info(f"Output base directory: {self.output_base_dir}")
 
