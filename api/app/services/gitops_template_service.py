@@ -28,6 +28,7 @@ class GitOpsTemplateService:
     PLACEHOLDER_ENVIRONMENT = "{{ENVIRONMENT}}"
     PLACEHOLDER_GIT_REPO_NAME = "{{GIT_REPO_NAME}}"
     PLACEHOLDER_GIT_BRANCH = "{{GIT_BRANCH}}"
+    PLACEHOLDER_GIT_SECRET = "{{GIT_SECRET}}"
     PLACEHOLDER_ARGOCD_APP_NAME = "{{ARGOCD_APP_NAME}}"
     PLACEHOLDER_GITOPS_REPO_URL = "{{GITOPS_REPO_URL}}"
     PLACEHOLDER_ENVIRONMENT_VARIABLES = "{{ENVIRONMENT_VARIABLES}}"
@@ -53,7 +54,8 @@ class GitOpsTemplateService:
 
         # Set default paths relative to project root
         project_root = Path(__file__).parent.parent.parent
-        self.template_dir = template_dir or project_root / "app" / "templates" / "git-ops"
+        # self.template_dir = template_dir or project_root / "app" / "templates" / "git-ops"
+        self.template_dir = template_dir or project_root / "app" / "templates" 
         self.output_base_dir = output_base_dir or project_root / "app" / "temp" / self.session_id 
 
         # Ensure output directory exists
@@ -219,6 +221,7 @@ class GitOpsTemplateService:
         environment: str,
         git_repo_name: str,
         git_branch: str,
+        git_secret: str,
         argocd_app_name: str,
         gitops_repo_url: str,
         env_content: Optional[str] = None
@@ -252,6 +255,7 @@ class GitOpsTemplateService:
             self.PLACEHOLDER_ENVIRONMENT: environment,
             self.PLACEHOLDER_GIT_REPO_NAME: git_repo_name,
             self.PLACEHOLDER_GIT_BRANCH: git_branch,
+            self.PLACEHOLDER_GIT_SECRET: git_secret,
             self.PLACEHOLDER_ARGOCD_APP_NAME: argocd_app_name,
             self.PLACEHOLDER_GITOPS_REPO_URL: gitops_repo_url,
         }
@@ -310,6 +314,7 @@ class GitOpsTemplateService:
         environment: str,
         git_repo_name: str,
         git_branch: str,
+        git_secret: str,
         argocd_app_name: str,
         gitops_repo_url: str,
         env_content: Optional[str] = None
@@ -325,6 +330,7 @@ class GitOpsTemplateService:
             environment: Target environment
             git_repo_name: Git repository name
             git_branch: Git branch
+            git_secret: Github Secret Key
             argocd_app_name: ArgoCD application name
             gitops_repo_url: GitOps repository URL
             env_content: Optional .env file content (KEY=VALUE pairs, same as ConfigMap)
@@ -341,14 +347,16 @@ class GitOpsTemplateService:
         if not is_valid:
             raise ValueError(error)
 
-        # Create output directory for this microservice
-        output_dir = self.output_base_dir / microservice_name
-        if output_dir.exists():
-            logger.info(f"Removing existing output directory: {output_dir}")
-            shutil.rmtree(output_dir)
+        # Output structure: output_base_dir/git-ops/microservice_name/ (helm chart)
+        #                   output_base_dir/github/microservice_name/ (github workflows)
+        # Clean up any existing output for this microservice
+        for template_folder in ['git-ops', 'github']:
+            microservice_output = self.output_base_dir / template_folder / microservice_name
+            if microservice_output.exists():
+                logger.info(f"Removing existing output directory: {microservice_output}")
+                shutil.rmtree(microservice_output)
 
-        output_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Created output directory: {output_dir}")
+        logger.info(f"Output base directory: {self.output_base_dir}")
 
         # Build replacement map
         replacements, env_vars = self.build_replacement_map(
@@ -359,6 +367,7 @@ class GitOpsTemplateService:
             environment=environment,
             git_repo_name=git_repo_name,
             git_branch=git_branch,
+            git_secret=git_secret,
             argocd_app_name=argocd_app_name,
             gitops_repo_url=gitops_repo_url,
             env_content=env_content
@@ -372,8 +381,18 @@ class GitOpsTemplateService:
         for template_file in template_files:
             try:
                 # Calculate relative path to maintain structure
+                # relative_path is like: git-ops/values.yaml or github/workflows.yaml
                 relative_path = template_file.relative_to(self.template_dir)
-                output_file = output_dir / relative_path
+
+                # Insert microservice_name after the template folder (git-ops or github)
+                # Structure: output_base_dir/git-ops/microservice_name/values.yaml
+                path_parts = relative_path.parts
+                if len(path_parts) >= 1:
+                    template_folder = path_parts[0]  # git-ops or github
+                    rest_of_path = Path(*path_parts[1:]) if len(path_parts) > 1 else Path("")
+                    output_file = self.output_base_dir / template_folder / microservice_name / rest_of_path
+                else:
+                    output_file = self.output_base_dir / microservice_name / relative_path
 
                 # Create parent directories if needed
                 output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -429,7 +448,7 @@ class GitOpsTemplateService:
         }
 
         return {
-            'output_directory': str(output_dir),
+            'output_directory': str(self.output_base_dir),
             'processed_files': processed_files,
             'total_files_processed': len(processed_files),
             'template_variables': readable_replacements,

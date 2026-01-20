@@ -153,7 +153,7 @@ class RepositoryType(str, Enum):
 
 class EnvironmentType(str, Enum):
     """Supported environment types"""
-    DEVELOPMENT = "development"
+    DEVELOPMENT = "dev"
     STAGING = "staging"
     PRODUCTION = "production"
     QA = "qa"

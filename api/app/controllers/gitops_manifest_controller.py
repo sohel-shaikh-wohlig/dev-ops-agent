@@ -101,6 +101,7 @@ class GitOpsManifestController:
                 environment=env_value,
                 git_repo_name=request.git_repo_name,
                 git_branch=request.git_branch,
+                git_secret=settings.GITHUB_TOKEN,
                 argocd_app_name=request.argocd_app_name,
                 gitops_repo_url=request.gitops_repo_url,
                 env_content=request.env_content
@@ -119,23 +120,22 @@ class GitOpsManifestController:
             # Step 2: Locating microservice...
             logger.info("Step 2: Locating microservice...")
             repo_dir = self.template_service.output_base_dir
-            
-            microservice_path = self._find_microservice_path(
-                repo_dir,
-                request.microservice_name
-            )
 
-            if not microservice_path:
+            # Output structure: repo_dir/git-ops/microservice_name/ (helm chart)
+            #                   repo_dir/github/microservice_name/ (github workflows)
+            gitops_path = repo_dir / "git-ops" / request.microservice_name
+
+            if not gitops_path.exists():
                 raise Exception(
-                    f"Microservice '{request.microservice_name}' not found in repository. "
-                    f"Searched in: {repo_dir}"
+                    f"git-ops folder not found for microservice '{request.microservice_name}'. "
+                    f"Expected at: {gitops_path}"
                 )
 
-            logger.info(f"Found microservice at: {microservice_path}")
+            logger.info(f"Found git-ops path at: {gitops_path}")
 
-            # Step 3: Initialize config service
+            # Step 3: Initialize config service with git-ops path (contains values.yaml and templates/)
             logger.info("Step 3: Initializing configuration service...")
-            config_service = ConfigMapService(microservice_path)
+            config_service = ConfigMapService(gitops_path)
 
             # Validate structure
             is_valid, error_msg = config_service.validate_structure()
@@ -174,7 +174,8 @@ class GitOpsManifestController:
 
             # Step 7: Move template output folder to cloned repository
             logger.info("Step 7: Moving generated manifests to cloned repository...")
-            source_dir = self.template_service.output_base_dir / request.microservice_name
+            # Source structure: output_base_dir/git-ops/microservice_name/
+            source_dir = self.template_service.output_base_dir / "git-ops" / request.microservice_name
             destination_dir = clone_repo_dir / request.microservice_name
 
             # Remove destination if it exists (to replace with new manifests)
