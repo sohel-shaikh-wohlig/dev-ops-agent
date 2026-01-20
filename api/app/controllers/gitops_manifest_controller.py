@@ -222,7 +222,28 @@ class GitOpsManifestController:
 
                 logger.info("Changes pushed to remote repository successfully!")
 
-            # Step 9: Clone microservice repo for GitHub workflows
+            # Step 9: Create GitHub repository secrets
+            logger.info("Step 9: Creating GitHub repository secrets...")
+            secrets_file = self.template_service.output_base_dir / "github" / request.microservice_name / "secrets.txt"
+
+            # Extract repo name from microservice_url (e.g., https://github.com/owner/repo.git -> repo)
+            repo_name = request.microservice_url.rstrip('/').rstrip('.git').split('/')[-1]
+
+            if not secrets_file.exists():
+                raise Exception(f"Secrets file not found at: {secrets_file}")
+
+            success, error = git_service.create_repository_secrets(
+                secrets_file=secrets_file,
+                owner="allvest-wm",
+                repo=repo_name
+            )
+
+            if not success:
+                raise Exception(f"Failed to create repository secrets: {error}")
+
+            logger.info(f"Repository secrets created successfully for {repo_name}")
+
+            # Step 10: Clone microservice repo for GitHub workflows
             logger.info("Step 9: Cloning microservice repository for GitHub workflows...")
             microservice_repo_dir = project_root / "app" / "temp" / self.template_service.session_id / "microservice-repo"
             success, error = git_service.clone_repository(
@@ -236,8 +257,8 @@ class GitOpsManifestController:
 
             logger.info(f"Microservice repository cloned to: {microservice_repo_dir}")
 
-            # Step 10: Create .github/workflows folder and move workflow file
-            logger.info("Step 10: Setting up GitHub workflows...")
+            # Step 11: Create .github/workflows folder and move workflow file
+            logger.info("Step 11: Setting up GitHub workflows...")
             workflows_dir = microservice_repo_dir / ".github" / "workflows"
             workflows_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"Created workflows directory: {workflows_dir}")
@@ -253,8 +274,8 @@ class GitOpsManifestController:
             else:
                 logger.warning(f"Workflow file not found at: {source_workflow}")
 
-            # Step 11: Commit and push GitHub workflows
-            logger.info("Step 11: Committing and pushing GitHub workflows...")
+            # Step 12: Commit and push GitHub workflows
+            logger.info("Step 12: Committing and pushing GitHub workflows...")
             ms_git_root = git_service.find_git_root(microservice_repo_dir)
             if not ms_git_root:
                 raise Exception("Could not find git root in microservice repository")
@@ -280,8 +301,8 @@ class GitOpsManifestController:
 
                 logger.info("GitHub workflow pushed successfully!")
 
-            # Step 12: Clean up temp folder
-            logger.info("Step 12: Cleaning up temp folder...")
+            # Step 13: Clean up temp folder
+            logger.info("Step 13: Cleaning up temp folder...")
             temp_session_dir = project_root / "app" / "temp" / self.template_service.session_id
             if temp_session_dir.exists():
                 shutil.rmtree(temp_session_dir)

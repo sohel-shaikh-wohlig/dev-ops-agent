@@ -3,10 +3,11 @@ Git Utilities Service
 Handles Git operations: clone, pull, commit, push
 Based on original script's git functionality
 """
+import os
 import subprocess
 import shutil
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Dict, Optional, Tuple, List
 from app.core.logging_config import logger
 from app.core.config import get_settings
 
@@ -331,6 +332,124 @@ class GitUtilitiesService:
         except Exception as e:
             logger.error(f"Failed to cleanup repository: {e}")
 
+    @staticmethod
+    def create_repository_secrets(
+        secrets_file: Path,
+        owner: str,
+        repo: str,
+        overrides: Optional[Dict[str, str]] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Create/update GitHub repository secrets from a secrets map file
+        Uses GitHub CLI (gh) to set repository secrets
+        
+        Args:
+            secrets_file: Path to secrets map file (key=value format)
+            owner: Repository owner/organization
+            repo: Repository name
+            overrides: Optional dict of key-value pairs to override file values
+            
+        Returns:
+            Tuple of (success, error_message)
+            
+        Example:
+            secrets_file format:
+                # Comment line
+                API_KEY=my-secret-key
+                DB_PASSWORD=/path/to/password/file
+                SERVICE_URL=$SERVICE_ENDPOINT
+        """
+        try:
+            if not secrets_file.exists():
+                error_msg = f"Secrets file not found: {secrets_file}"
+                logger.error(error_msg)
+                return False, error_msg
+            
+            repo_full_name = f"{owner}/{repo}"
+            logger.info(f"Setting secrets for repository: {repo_full_name}")
+            
+            overrides = overrides or {}
+            secrets_set = 0
+            
+            # Read secrets from file
+            with open(secrets_file, 'r') as f:
+                lines = f.readlines()
+            
+            for line_num, line in enumerate(lines, 1):
+                line = line.strip()
+                
+                # Skip empty lines and comments
+                if not line or line.startswith('#'):
+                    continue
+                
+                # Parse key=value
+                if '=' not in line:
+                    logger.warning(f"Skipping invalid line {line_num}: {line}")
+                    continue
+                
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                
+                if not key:
+                    logger.warning(f"Skipping line {line_num} with empty key")
+                    continue
+                
+                # Apply override if exists
+                if key in overrides:
+                    value = overrides[key]
+                    logger.debug(f"Using override for {key}")
+                
+                # Expand environment variables (e.g., $VAR or ${VAR})
+                value = os.path.expandvars(value)
+                
+                # Check if value is a file path
+                value_path = Path(value)
+                if value_path.exists() and value_path.is_file():
+                    logger.info(f"🔑 Setting secret from file: {key} ({value}) in {repo_full_name}")
+                    # Read secret from file and pass via stdin
+                    try:
+                        with open(value_path, 'r') as secret_file:
+                            secret_content = secret_file.read()
+                        
+                        result = subprocess.run(
+                            ['gh', 'secret', 'set', key, '-R', repo_full_name],
+                            input=secret_content,
+                            capture_output=True,
+                            text=True,
+                            timeout=60
+                        )
+                    except Exception as e:
+                        error_msg = f"Failed to read secret file {value}: {str(e)}"
+                        logger.error(error_msg)
+                        return False, error_msg
+                else:
+                    logger.info(f"🔑 Setting secret: {key} in {repo_full_name}")
+                    result = subprocess.run(
+                        ['gh', 'secret', 'set', key, '--body', value, '-R', repo_full_name],
+                        capture_output=True,
+                        text=True,
+                        timeout=60
+                    )
+                
+                if result.returncode != 0:
+                    error_msg = f"Failed to set secret '{key}': {result.stderr.strip()}"
+                    logger.error(error_msg)
+                    return False, error_msg
+                
+                secrets_set += 1
+            
+            logger.info(f"✅ Successfully set {secrets_set} secret(s) for {repo_full_name}")
+            return True, None
+            
+        except subprocess.TimeoutExpired:
+            error_msg = "GitHub secret set operation timed out"
+            logger.error(error_msg)
+            return False, error_msg
+        except Exception as e:
+            error_msg = f"Failed to create repository secrets: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
 
 # Create singleton instance
 git_service = GitUtilitiesService()
