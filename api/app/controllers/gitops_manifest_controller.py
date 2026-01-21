@@ -418,8 +418,8 @@ class GitOpsManifestController:
                     if not argocd_service.is_available:
                         raise Exception("ArgoCD service is not available")
 
-                    # Step 17: Wait for ArgoCD application to be Healthy before syncing
-                    logger.info("Step 17: Waiting for ArgoCD application to be Healthy...")
+                    # Step 17: Wait for ArgoCD application to be created before syncing
+                    logger.info("Step 17: Waiting for ArgoCD application to be created...")
 
                     health_status = None
                     health_max_attempts = 60  # Max 10 minutes (60 * 10 seconds)
@@ -436,7 +436,7 @@ class GitOpsManifestController:
 
                             logger.info(f"ArgoCD application health status: {health_status}")
 
-                            if health_status == "Healthy":
+                            if health_status == "Missing":
                                 logger.info("ArgoCD application is Healthy. Proceeding to sync...")
                                 break
 
@@ -446,8 +446,8 @@ class GitOpsManifestController:
                         # Wait 10 seconds before next poll
                         await asyncio.sleep(10)
 
-                    if health_status != "Healthy":
-                        raise Exception(f"ArgoCD application did not become Healthy within timeout. Last status: {health_status}")
+                    if health_status != "Missing":
+                        raise Exception(f"ArgoCD application is not created within timeout. Last status: {health_status}")
 
                     # Step 18: Sync ArgoCD application
                     logger.info("Step 18: Syncing ArgoCD application...")
@@ -462,11 +462,11 @@ class GitOpsManifestController:
                 message=f"{request.domain_name} deployed successfully",
                 microservice_name=request.microservice_name,
                 environment=env_value,
-                # output_directory=result['output_directory'],
-                # processed_files=processed_files,
-                # total_files_processed=result['total_files_processed'],
-                # template_variables=result['template_variables'],
-                # environment_variables=result.get('environment_variables', {})
+                output_directory=result['output_directory'],
+                processed_files=processed_files,
+                total_files_processed=result['total_files_processed'],
+                template_variables=result['template_variables'],
+                environment_variables=result.get('environment_variables', {})
             )
 
             logger.info(f"=== Manifest Generation Complete ===")
