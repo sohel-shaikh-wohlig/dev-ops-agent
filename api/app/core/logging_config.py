@@ -47,6 +47,10 @@ def setup_logging() -> logging.Logger:
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     
+    # Log Stream Handler
+    from app.core.log_stream import log_stream_handler
+    logger.addHandler(log_stream_handler)
+    
     return logger
 
 

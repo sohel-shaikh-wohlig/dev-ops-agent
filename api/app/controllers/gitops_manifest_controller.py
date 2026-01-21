@@ -4,6 +4,8 @@ Handles GitOps manifest generation workflow
 """
 
 import shutil
+import asyncio
+import httpx
 from pathlib import Path
 from typing import Optional
 from app.models.gitops import (
@@ -316,7 +318,7 @@ class GitOpsManifestController:
             logger.info("Step 14: Creating ArgoCD application...")
             if argocd_service.is_available:
                 argocd_result = argocd_service.create_application(
-                    name=request.microservice_name,
+                    name=request.argocd_app_name,
                     project=env_value,
                     repo_url=request.gitops_repo_url,
                     path=request.microservice_name,
@@ -343,16 +345,128 @@ class GitOpsManifestController:
             )
             logger.info(f"Cloudflare DNS record created successfully: {request.argocd_app_name}")
 
+            # Step 16: Monitor GitHub Action and sync ArgoCD
+            logger.info("Step 16: Monitoring GitHub Action workflow...")
+
+            # Wait 10 seconds for GitHub Action to start
+            await asyncio.sleep(10)
+
+            # Construct GitHub API domain from microservice_url
+            # Transform https://github.com/owner/repo to https://api.github.com/repos/owner/repo
+            github_action_domain = request.microservice_url.rstrip('/').rstrip('.git')
+            github_action_domain = github_action_domain.replace("https://github.com/", "https://api.github.com/repos/")
+
+            # Set up headers for GitHub API
+            github_headers = {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": f"Bearer {settings.GITHUB_TOKEN}"
+            }
+
+            # Fetch workflow ID
+            logger.info(f"Fetching workflow runs for commit: {workflow_commit_hash}")
+            async with httpx.AsyncClient() as client:
+                workflow_runs_url = f"{github_action_domain}/actions/runs?head_sha={workflow_commit_hash}"
+                runs_response = await client.get(workflow_runs_url, headers=github_headers)
+
+                if runs_response.status_code != 200:
+                    raise Exception(f"Failed to fetch workflow runs: {runs_response.text}")
+
+                runs_data = runs_response.json()
+                workflow_runs = runs_data.get("workflow_runs", [])
+
+                if not workflow_runs:
+                    raise Exception(f"No workflow runs found for commit: {workflow_commit_hash}")
+
+                workflow_id = workflow_runs[0].get("id")
+                logger.info(f"Found workflow ID: {workflow_id}")
+
+                # Polling loop - check status every 10 seconds
+                workflow_status = None
+                workflow_conclusion = None
+                max_attempts = 60  # Max 10 minutes (60 * 10 seconds)
+                attempt = 0
+
+                while attempt < max_attempts:
+                    attempt += 1
+                    logger.info(f"Polling workflow status (attempt {attempt}/{max_attempts})...")
+
+                    status_url = f"{github_action_domain}/actions/runs/{workflow_id}"
+                    status_response = await client.get(status_url, headers=github_headers)
+
+                    if status_response.status_code != 200:
+                        raise Exception(f"Failed to fetch workflow status: {status_response.text}")
+
+                    status_data = status_response.json()
+                    workflow_status = status_data.get("status")
+                    workflow_conclusion = status_data.get("conclusion")
+
+                    logger.info(f"Workflow status: {workflow_status}, conclusion: {workflow_conclusion}")
+
+                    if workflow_status == "completed":
+                        break
+
+                    # Wait 10 seconds before next poll
+                    await asyncio.sleep(10)
+
+                if workflow_status != "completed":
+                    raise Exception(f"Workflow did not complete within timeout. Last status: {workflow_status}")
+
+                # Check conclusion
+                if workflow_conclusion == "success":
+                    logger.info("GitHub Action completed successfully.")
+
+                    if not argocd_service.is_available:
+                        raise Exception("ArgoCD service is not available")
+
+                    # Step 17: Wait for ArgoCD application to be Healthy before syncing
+                    logger.info("Step 17: Waiting for ArgoCD application to be Healthy...")
+
+                    health_status = None
+                    health_max_attempts = 60  # Max 10 minutes (60 * 10 seconds)
+                    health_attempt = 0
+
+                    while health_attempt < health_max_attempts:
+                        health_attempt += 1
+                        logger.info(f"Checking ArgoCD health status (attempt {health_attempt}/{health_max_attempts})...")
+
+                        try:
+                            app_status = argocd_service.get_application_status(request.argocd_app_name)
+                            health_info = app_status.get("health", {})
+                            health_status = health_info.get("status")
+
+                            logger.info(f"ArgoCD application health status: {health_status}")
+
+                            if health_status == "Healthy":
+                                logger.info("ArgoCD application is Healthy. Proceeding to sync...")
+                                break
+
+                        except Exception as health_err:
+                            logger.warning(f"Error fetching health status: {health_err}")
+
+                        # Wait 10 seconds before next poll
+                        await asyncio.sleep(10)
+
+                    if health_status != "Healthy":
+                        raise Exception(f"ArgoCD application did not become Healthy within timeout. Last status: {health_status}")
+
+                    # Step 18: Sync ArgoCD application
+                    logger.info("Step 18: Syncing ArgoCD application...")
+                    sync_result = argocd_service.sync_application(request.argocd_app_name)
+                    logger.info(f"ArgoCD application synced successfully: {request.argocd_app_name}")
+
+                else:
+                    raise Exception(f"GitHub Action failed with conclusion: {workflow_conclusion}")
+
             response = GitOpsManifestResponse(
                 status="success",
-                message=f"GitOps manifests generated successfully for {request.microservice_name}",
+                message=f"{request.domain_name} deployed successfully",
                 microservice_name=request.microservice_name,
                 environment=env_value,
-                output_directory=result['output_directory'],
-                processed_files=processed_files,
-                total_files_processed=result['total_files_processed'],
-                template_variables=result['template_variables'],
-                environment_variables=result.get('environment_variables', {})
+                # output_directory=result['output_directory'],
+                # processed_files=processed_files,
+                # total_files_processed=result['total_files_processed'],
+                # template_variables=result['template_variables'],
+                # environment_variables=result.get('environment_variables', {})
             )
 
             logger.info(f"=== Manifest Generation Complete ===")
