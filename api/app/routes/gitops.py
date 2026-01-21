@@ -77,8 +77,9 @@ async def generate_microservice_manifests(
                 logger.info(f"Manifest generation completed for {request.microservice_name}")
                 
                 # Verify result is a Pydantic model and dump it to JSON
-                result_dict = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
-                
+                # Use mode='json' to convert datetime objects to ISO format strings
+                result_dict = result.model_dump(mode='json') if hasattr(result, 'model_dump') else result.dict()
+
                 # Send final result
                 yield json.dumps({
                     "type": "result",
