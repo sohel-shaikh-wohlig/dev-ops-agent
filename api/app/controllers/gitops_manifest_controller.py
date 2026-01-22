@@ -20,6 +20,7 @@ from app.services.argocd_service import ArgoCDService
 from app.services.cloudflare_service import CloudflareService, DNSRecordCreate
 from app.core.logging_config import logger
 from app.core.config import get_settings
+from app.core.exceptions import ArgoCDAPIException
 
 settings = get_settings()
 
@@ -98,6 +99,18 @@ class GitOpsManifestController:
             # Get environment value as string
             env_value = request.environment.value if hasattr(request.environment, 'value') else str(request.environment)
 
+            # Convert cronjob model to dict if provided
+            cronjob_dict = None
+            if request.cronjob:
+                cronjob_dict = request.cronjob.model_dump()
+                logger.info(f"CronJob configuration provided:")
+                logger.info(f"  - Name: {cronjob_dict.get('name')}")
+                logger.info(f"  - Schedule: {cronjob_dict.get('schedule')}")
+                logger.info(f"  - Suspend: {cronjob_dict.get('suspend')}")
+                logger.info(f"  - Command: {cronjob_dict.get('cmd')}")
+            else:
+                logger.info("No CronJob configuration provided - skipping cronjob setup")
+
             # Process templates with env_content (same format as ConfigMap)
             result = self.template_service.process_template(
                 microservice_name=request.microservice_name,
@@ -110,7 +123,8 @@ class GitOpsManifestController:
                 git_secret=settings.GITHUB_TOKEN,
                 argocd_app_name=request.argocd_app_name,
                 gitops_repo_url=request.gitops_repo_url,
-                env_content=request.env_content
+                env_content=request.env_content,
+                cronjob=cronjob_dict
             )
 
             # Build response
@@ -479,7 +493,8 @@ class GitOpsManifestController:
                 processed_files=processed_files,
                 total_files_processed=result['total_files_processed'],
                 template_variables=result['template_variables'],
-                environment_variables=result.get('environment_variables', {})
+                environment_variables=result.get('environment_variables', {}),
+                cronjob=result.get('cronjob')
             )
 
             logger.info(f"=== Manifest Generation Complete ===")
@@ -488,6 +503,11 @@ class GitOpsManifestController:
 
             return response
 
+        except ArgoCDAPIException as e:
+            logger.error(f"ArgoCD API error: {str(e)}")
+            logger.error(f"ArgoCD status code: {e.status_code}")
+            logger.error(f"ArgoCD response: {e.response_text}")
+            raise
         except Exception as e:
             logger.error(f"Manifest generation failed: {str(e)}", exc_info=True)
             raise

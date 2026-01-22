@@ -7,7 +7,7 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 from app.core.logging_config import logger
 from app.core.config import get_settings
 
@@ -34,6 +34,13 @@ class GitOpsTemplateService:
     PLACEHOLDER_ENVIRONMENT_VARIABLES = "{{ENVIRONMENT_VARIABLES}}"
     PLACEHOLDER_ENVIRONMENT_VARIABLES_YAML = "{{ENVIRONMENT_VARIABLES_YAML}}"
     PLACEHOLDER_ENVIRONMENT_VARIABLES_CONFIGMAP = "{{ENVIRONMENT_VARIABLES_CONFIGMAP}}"
+
+    # CronJob placeholders
+    PLACEHOLDER_CRONJOB_YAML = "{{CRONJOB_YAML}}"
+    PLACEHOLDER_CRONJOB_NAME = "{{CRONJOB_NAME}}"
+    PLACEHOLDER_CRONJOB_SCHEDULE = "{{CRONJOB_SCHEDULE}}"
+    PLACEHOLDER_CRONJOB_SUSPEND = "{{CRONJOB_SUSPEND}}"
+    PLACEHOLDER_CRONJOB_CMD = "{{CRONJOB_CMD}}"
 
     def __init__(
         self,
@@ -212,6 +219,70 @@ class GitOpsTemplateService:
 
         return '\n'.join(lines)
 
+    def format_cronjob_yaml(self, cronjob: Dict[str, Any], indent: int = 0) -> str:
+        """
+        Format cronjob configuration as YAML for values.yaml
+
+        Args:
+            cronjob: Dictionary containing cronjob configuration
+                Expected keys: name, schedule, suspend, cmd
+            indent: Number of spaces for base indentation
+
+        Returns:
+            YAML formatted cronjob section string
+        """
+        if not cronjob:
+            return ""
+
+        indent_str = " " * indent
+        lines = [f"{indent_str}cronjob:"]
+
+        # Format name
+        name = cronjob.get('name', '')
+        lines.append(f"{indent_str}  name: \"cronjob-{name}\"")
+
+        # Format suspend (boolean)
+        suspend = cronjob.get('suspend', False)
+        suspend_str = str(suspend).lower() if isinstance(suspend, bool) else str(suspend)
+        lines.append(f"{indent_str}  suspend: {suspend_str}")
+
+        # Format schedule
+        schedule = cronjob.get('schedule', '0 * * * *')
+        lines.append(f"{indent_str}  schedule: \"{schedule}\"")
+
+        # Format cmd (list of strings)
+        cmd = cronjob.get('cmd', [])
+        if isinstance(cmd, list) and cmd:
+            cmd_formatted = ', '.join(f'"{c}"' for c in cmd)
+            lines.append(f"{indent_str}  cmd: [{cmd_formatted}]")
+        elif isinstance(cmd, str):
+            lines.append(f"{indent_str}  cmd: [\"{cmd}\"]")
+        else:
+            lines.append(f"{indent_str}  cmd: []")
+
+        result = '\n'.join(lines)
+        logger.debug(f"Generated cronjob YAML:\n{result}")
+        return result
+
+    def format_cronjob_cmd(self, cmd: Any) -> str:
+        """
+        Format cronjob command as YAML array string
+
+        Args:
+            cmd: Command as string or list of strings
+
+        Returns:
+            YAML array formatted string
+        """
+        if not cmd:
+            return "[]"
+
+        if isinstance(cmd, list):
+            return '[' + ', '.join(f'"{c}"' for c in cmd) + ']'
+        elif isinstance(cmd, str):
+            return f'["{cmd}"]'
+        return "[]"
+
     def build_replacement_map(
         self,
         microservice_name: str,
@@ -224,7 +295,8 @@ class GitOpsTemplateService:
         git_secret: str,
         argocd_app_name: str,
         gitops_repo_url: str,
-        env_content: Optional[str] = None
+        env_content: Optional[str] = None,
+        cronjob: Optional[Dict[str, Any]] = None
     ) -> Tuple[Dict[str, str], Dict[str, str]]:
         """
         Build the replacement map for template processing
@@ -240,6 +312,7 @@ class GitOpsTemplateService:
             argocd_app_name: ArgoCD application name
             gitops_repo_url: GitOps repository URL
             env_content: Optional .env file content (KEY=VALUE pairs)
+            cronjob: Optional cronjob configuration dict with keys: name, schedule, suspend, cmd
 
         Returns:
             Tuple of (replacements dict, parsed env_vars dict)
@@ -273,6 +346,36 @@ class GitOpsTemplateService:
             for key, value in env_vars.items():
                 placeholder = f"{{{{{key}}}}}"
                 replacements[placeholder] = value
+
+        # Add cronjob configuration placeholders if provided
+        if cronjob:
+            logger.info("=== Processing CronJob Configuration ===")
+            logger.info(f"CronJob name: {cronjob.get('name', '')}")
+            logger.info(f"CronJob schedule: {cronjob.get('schedule', '0 * * * *')}")
+            logger.info(f"CronJob suspend: {cronjob.get('suspend', False)}")
+            logger.info(f"CronJob command: {cronjob.get('cmd', [])}")
+
+            # Full cronjob YAML section
+            replacements[self.PLACEHOLDER_CRONJOB_YAML] = self.format_cronjob_yaml(cronjob)
+            # Individual cronjob field placeholders
+            replacements[self.PLACEHOLDER_CRONJOB_NAME] = cronjob.get('name', '')
+            replacements[self.PLACEHOLDER_CRONJOB_SCHEDULE] = cronjob.get('schedule', '0 * * * *')
+            suspend = cronjob.get('suspend', False)
+            replacements[self.PLACEHOLDER_CRONJOB_SUSPEND] = str(suspend).lower() if isinstance(suspend, bool) else str(suspend)
+            replacements[self.PLACEHOLDER_CRONJOB_CMD] = self.format_cronjob_cmd(cronjob.get('cmd', []))
+
+            logger.info("CronJob placeholders added to replacement map")
+            logger.debug(f"CRONJOB_YAML placeholder value:\n{replacements[self.PLACEHOLDER_CRONJOB_YAML]}")
+        else:
+            logger.info("=== CronJob Configuration: Not Provided ===")
+            logger.info("Skipping cronjob setup - no cronjob data in request")
+            # If no cronjob provided, set empty placeholders to allow graceful skipping
+            replacements[self.PLACEHOLDER_CRONJOB_YAML] = ""
+            replacements[self.PLACEHOLDER_CRONJOB_NAME] = ""
+            replacements[self.PLACEHOLDER_CRONJOB_SCHEDULE] = ""
+            replacements[self.PLACEHOLDER_CRONJOB_SUSPEND] = ""
+            replacements[self.PLACEHOLDER_CRONJOB_CMD] = ""
+            logger.info("CronJob placeholders set to empty strings")
 
         logger.info(f"Built replacement map with {len(replacements)} variables")
         logger.info(f"Parsed {len(env_vars)} environment variables from env_content")
@@ -317,7 +420,8 @@ class GitOpsTemplateService:
         git_secret: str,
         argocd_app_name: str,
         gitops_repo_url: str,
-        env_content: Optional[str] = None
+        env_content: Optional[str] = None,
+        cronjob: Optional[Dict[str, Any]] = None
     ) -> Dict:
         """
         Process all template files with variable substitution
@@ -334,6 +438,8 @@ class GitOpsTemplateService:
             argocd_app_name: ArgoCD application name
             gitops_repo_url: GitOps repository URL
             env_content: Optional .env file content (KEY=VALUE pairs, same as ConfigMap)
+            cronjob: Optional cronjob configuration dict with keys: name, schedule, suspend, cmd.
+                     If None, cronjob-related placeholders will be replaced with empty strings.
 
         Returns:
             Dictionary with processing results
@@ -370,7 +476,8 @@ class GitOpsTemplateService:
             git_secret=git_secret,
             argocd_app_name=argocd_app_name,
             gitops_repo_url=gitops_repo_url,
-            env_content=env_content
+            env_content=env_content,
+            cronjob=cronjob
         )
 
         # Get template files
@@ -383,6 +490,11 @@ class GitOpsTemplateService:
                 # Calculate relative path to maintain structure
                 # relative_path is like: git-ops/values.yaml or github/workflows.yaml
                 relative_path = template_file.relative_to(self.template_dir)
+
+                # Skip cronjob.yaml if no cronjob configuration provided
+                if template_file.name == 'cronjob.yaml' and not cronjob:
+                    logger.info(f"Skipping {relative_path} - no cronjob configuration provided")
+                    continue
 
                 # Insert microservice_name after the template folder (git-ops or github)
                 # Structure: output_base_dir/git-ops/microservice_name/values.yaml
@@ -439,11 +551,12 @@ class GitOpsTemplateService:
         readable_replacements = {
             k.replace("{{", "").replace("}}", ""): v
             for k, v in replacements.items()
-            # Exclude the formatted env var blocks from the simple variables list
+            # Exclude the formatted env var and cronjob blocks from the simple variables list
             if k not in [
                 self.PLACEHOLDER_ENVIRONMENT_VARIABLES,
                 self.PLACEHOLDER_ENVIRONMENT_VARIABLES_YAML,
-                self.PLACEHOLDER_ENVIRONMENT_VARIABLES_CONFIGMAP
+                self.PLACEHOLDER_ENVIRONMENT_VARIABLES_CONFIGMAP,
+                self.PLACEHOLDER_CRONJOB_YAML
             ]
         }
 
@@ -452,7 +565,8 @@ class GitOpsTemplateService:
             'processed_files': processed_files,
             'total_files_processed': len(processed_files),
             'template_variables': readable_replacements,
-            'environment_variables': env_vars
+            'environment_variables': env_vars,
+            'cronjob': cronjob
         }
 
     def cleanup_output(self, microservice_name: str) -> None:

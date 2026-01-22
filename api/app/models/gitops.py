@@ -3,11 +3,54 @@ GitOps Manifest Generation Models
 Request/Response models for GitOps template processing
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime
 from pydantic import BaseModel, Field, validator
 
 from app.models.common import EnvironmentType
+
+
+class CronJobConfig(BaseModel):
+    """
+    Configuration model for CronJob settings
+
+    Defines the schedule and command for a Kubernetes CronJob.
+    """
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Name of the cronjob",
+        example="data-sync"
+    )
+
+    schedule: str = Field(
+        default="0 * * * *",
+        description="Cron schedule expression (e.g., '0 2 * * *' for daily at 2 AM)",
+        example="0 2 * * *"
+    )
+
+    suspend: bool = Field(
+        default=False,
+        description="Whether to suspend the cronjob",
+        example=False
+    )
+
+    cmd: List[str] = Field(
+        default_factory=list,
+        description="Command to execute as a list of strings",
+        example=["npm", "run", "sync"]
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "data-sync",
+                "schedule": "0 2 * * *",
+                "suspend": False,
+                "cmd": ["npm", "run", "sync"]
+            }
+        }
 
 
 class GitOpsManifestRequest(BaseModel):
@@ -93,6 +136,18 @@ class GitOpsManifestRequest(BaseModel):
         example="LOG_LEVEL=debug\nNODE_ENV=development\nDATABASE_URL=postgresql://localhost:5432/db"
     )
 
+    cronjob: Optional[CronJobConfig] = Field(
+        default=None,
+        description="Optional CronJob configuration. If provided, cronjob resources will be included "
+                    "in the generated manifests. If null or omitted, no cronjob will be configured.",
+        example={
+            "name": "data-sync",
+            "schedule": "0 2 * * *",
+            "suspend": False,
+            "cmd": ["npm", "run", "sync"]
+        }
+    )
+
     @validator('microservice_name')
     def validate_microservice_name(cls, v):
         """Validate microservice name format"""
@@ -144,7 +199,13 @@ class GitOpsManifestRequest(BaseModel):
                 "gitBranch": "main",
                 "argoCdAppName": "user-service-dev",
                 "domainName": "api.example.com",
-                "envContent": "LOG_LEVEL=debug\nNODE_ENV=development\nDATABASE_URL=postgresql://localhost:5432/db"
+                "envContent": "LOG_LEVEL=debug\nNODE_ENV=development\nDATABASE_URL=postgresql://localhost:5432/db",
+                "cronjob": {
+                    "name": "data-sync",
+                    "schedule": "0 2 * * *",
+                    "suspend": False,
+                    "cmd": ["npm", "run", "sync"]
+                }
             }
         }
 
@@ -205,6 +266,11 @@ class GitOpsManifestResponse(BaseModel):
         description="Parsed environment variables from env_content"
     )
 
+    cronjob: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="CronJob configuration if provided in the request"
+    )
+
     timestamp: datetime = Field(
         default_factory=datetime.utcnow,
         description="Timestamp of operation"
@@ -229,6 +295,12 @@ class GitOpsManifestResponse(BaseModel):
                 "template_variables": {
                     "MICRO_SERVICE_NAME": "user-service",
                     "CONTAINER_PORT": "8080"
+                },
+                "cronjob": {
+                    "name": "data-sync",
+                    "schedule": "0 2 * * *",
+                    "suspend": False,
+                    "cmd": ["npm", "run", "sync"]
                 },
                 "timestamp": "2026-01-19T15:30:00.000000"
             }

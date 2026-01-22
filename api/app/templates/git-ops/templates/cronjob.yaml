@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Values.cronjob.name }}
+  namespace: {{ .Values.service.namespace }}
+spec:
+  schedule:  {{ .Values.cronjob.schedule }}
+  suspend: {{ .Values.cronjob.suspend }}
+  successfulJobsHistoryLimit: 1  # Only keep the last 1 successful job
+  failedJobsHistoryLimit: 1      # Only keep the last 1 failed job
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: {{ .Values.cronjob.name }}
+              image: "{{ .Values.image.name }}:{{ .Values.image.tag }}"
+              command: 
+                {{- toYaml .Values.cronjob.cmd | nindent 14 }}
+              envFrom:
+                - configMapRef:
+                    name: {{ .Values.name }}
+              volumeMounts:
+                - name: db-certs
+                  mountPath: /app/certs
+                  readOnly: true
+          restartPolicy: Never
+          volumes:
+            - name: db-certs
+              secret:
+                secretName: db-certs
+                defaultMode: 400

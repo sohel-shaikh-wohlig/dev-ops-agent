@@ -11,6 +11,7 @@ image:
   name: asia-south1-docker.pkg.dev/project-avs-ops/prj-avs-gar-staging/{{MICRO_SERVICE_NAME}}
   tag: dev-58fhhdcbsjh
   pullPolicy: Always
+{{CRONJOB_YAML}}
 service:
   type: ClusterIP
   port: 80
