@@ -338,7 +338,7 @@ class GitOpsManifestController:
 
             # Construct GitHub API domain from microservice_url
             # Transform https://github.com/owner/repo to https://api.github.com/repos/owner/repo
-            github_action_domain = request.microservice_url.rstrip('/').rstrip('.git')
+            github_action_domain = request.microservice_url.rstrip('/')
             github_action_domain = github_action_domain.replace("https://github.com/", "https://api.github.com/repos/")
 
             # Set up headers for GitHub API
