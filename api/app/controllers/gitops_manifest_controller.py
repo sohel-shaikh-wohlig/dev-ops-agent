@@ -362,14 +362,30 @@ class GitOpsManifestController:
                 "Authorization": f"Bearer {settings.GITHUB_TOKEN}"
             }
 
-            # Fetch workflow ID
+            # Fetch workflow ID with retry logic for 404 (race condition)
             logger.info(f"Fetching workflow runs for commit: {workflow_commit_hash}")
             async with httpx.AsyncClient() as client:
                 workflow_runs_url = f"{github_action_domain}/actions/runs?head_sha={workflow_commit_hash}"
-                runs_response = await client.get(workflow_runs_url, headers=github_headers)
 
-                if runs_response.status_code != 200:
-                    raise Exception(f"Failed to fetch workflow runs: {runs_response.text}")
+                max_fetch_retries = 5
+                fetch_retry_delay = 10  # seconds
+                runs_response = None
+
+                for fetch_attempt in range(1, max_fetch_retries + 1):
+                    logger.info(f"Fetching workflow runs (attempt {fetch_attempt}/{max_fetch_retries})...")
+                    runs_response = await client.get(workflow_runs_url, headers=github_headers)
+
+                    if runs_response.status_code == 200:
+                        break
+                    elif runs_response.status_code == 404:
+                        if fetch_attempt < max_fetch_retries:
+                            logger.warning(f"Workflow runs not found (404), retrying in {fetch_retry_delay}s...")
+                            await asyncio.sleep(fetch_retry_delay)
+                        else:
+                            raise Exception(f"Failed to fetch workflow runs after {max_fetch_retries} attempts: {runs_response.text}")
+                    else:
+                        # For non-404 errors, raise immediately
+                        raise Exception(f"Failed to fetch workflow runs: {runs_response.text}")
 
                 runs_data = runs_response.json()
                 workflow_runs = runs_data.get("workflow_runs", [])
