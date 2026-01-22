@@ -233,8 +233,8 @@ class GitOpsManifestController:
             secrets_file = self.template_service.output_base_dir / "github" / request.microservice_name / "secrets.txt"
 
             # Extract repo name from microservice_url (e.g., https://github.com/owner/repo.git -> repo)
-            repo_name = request.microservice_url.rstrip('/').rstrip('.git').split('/')[-1]
-
+            repo_name = request.microservice_url.rstrip('/').removesuffix('.git').split('/')[-1]
+            
             if not secrets_file.exists():
                 raise Exception(f"Secrets file not found at: {secrets_file}")
 
