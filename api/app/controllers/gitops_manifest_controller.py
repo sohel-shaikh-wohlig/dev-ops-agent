@@ -314,23 +314,8 @@ class GitOpsManifestController:
                 shutil.rmtree(temp_session_dir)
                 logger.info(f"Cleaned up temp folder: {temp_session_dir}")
 
-            # Step 14: Create ArgoCD application
-            logger.info("Step 14: Creating ArgoCD application...")
-            if argocd_service.is_available:
-                argocd_result = argocd_service.create_application(
-                    name=request.argocd_app_name,
-                    project=env_value,
-                    repo_url=request.gitops_repo_url,
-                    path=request.microservice_name,
-                    target_revision=env_value,
-                    destination_namespace=request.argocd_app_name
-                )
-                logger.info(f"ArgoCD application created successfully: {request.microservice_name}")
-            else:
-                raise Exception("ArgoCD service is not available")
-
-            # Step 15: Create Cloudflare DNS Record
-            logger.info("Step 15: Creating Cloudflare DNS record...")
+            # Step 14: Create Cloudflare DNS Record
+            logger.info("Step 14: Creating Cloudflare DNS record...")
             cloudflare_service = CloudflareService(api_token=settings.CLOUDFLARE_TOKEN)
 
             dns_record_data = DNSRecordCreate(
@@ -345,8 +330,8 @@ class GitOpsManifestController:
             )
             logger.info(f"Cloudflare DNS record created successfully: {request.argocd_app_name}")
 
-            # Step 16: Monitor GitHub Action and sync ArgoCD
-            logger.info("Step 16: Monitoring GitHub Action workflow...")
+            # Step 15: Monitor GitHub Action and sync ArgoCD
+            logger.info("Step 15: Monitoring GitHub Action workflow...")
 
             # Wait 10 seconds for GitHub Action to start
             await asyncio.sleep(10)
@@ -366,8 +351,8 @@ class GitOpsManifestController:
             logger.info(f"Fetching workflow runs for commit: {workflow_commit_hash}")
             async with httpx.AsyncClient() as client:
                 workflow_runs_url = f"{github_action_domain}/actions/runs?head_sha={workflow_commit_hash}"
-
-                max_fetch_retries = 5
+                logger.info(f"workflow_runs_url : {workflow_runs_url}")
+                max_fetch_retries = 10
                 fetch_retry_delay = 10  # seconds
                 runs_response = None
 
@@ -433,6 +418,18 @@ class GitOpsManifestController:
 
                     if not argocd_service.is_available:
                         raise Exception("ArgoCD service is not available")
+
+                    # Step 16: Create ArgoCD application
+                    logger.info("Step 16: Creating ArgoCD application...")
+                    argocd_result = argocd_service.create_application(
+                        name=request.argocd_app_name,
+                        project=env_value,
+                        repo_url=request.gitops_repo_url,
+                        path=request.microservice_name,
+                        target_revision=env_value,
+                        destination_namespace=request.argocd_app_name
+                    )
+                    logger.info(f"ArgoCD application created successfully: {request.microservice_name}")
 
                     # Step 17: Wait for ArgoCD application to be created before syncing
                     logger.info("Step 17: Waiting for ArgoCD application to be created...")

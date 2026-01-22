@@ -47,7 +47,7 @@ export function ConfigMapPage() {
 
   const form = useForm({
     defaultValues: {
-      environment: "development",
+      environment: "dev",
       microserviceName: "",
       repoUrl: "https://github.com/allvest-wm/git-ops.git",
       gitRepoName: "",
@@ -232,8 +232,8 @@ export function ConfigMapPage() {
                         <SelectValue placeholder="Select environment" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="development">Dev</SelectItem>
-                        <SelectItem value="staging">Stage</SelectItem>
+                        <SelectItem value="dev">Dev</SelectItem>
+                        <SelectItem value="uat">Stage</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
