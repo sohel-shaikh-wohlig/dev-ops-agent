@@ -136,16 +136,24 @@ class GitOpsManifestRequest(BaseModel):
         example="LOG_LEVEL=debug\nNODE_ENV=development\nDATABASE_URL=postgresql://localhost:5432/db"
     )
 
-    cronjob: Optional[CronJobConfig] = Field(
+    cronjobs: Optional[List[CronJobConfig]] = Field(
         default=None,
-        description="Optional CronJob configuration. If provided, cronjob resources will be included "
-                    "in the generated manifests. If null or omitted, no cronjob will be configured.",
-        example={
-            "name": "data-sync",
-            "schedule": "0 2 * * *",
-            "suspend": False,
-            "cmd": ["npm", "run", "sync"]
-        }
+        description="Optional list of CronJob configurations. If provided, cronjob resources will be included "
+                    "in the generated manifests for each entry. If null or empty, no cronjobs will be configured.",
+        example=[
+            {
+                "name": "data-sync",
+                "schedule": "0 2 * * *",
+                "suspend": False,
+                "cmd": ["npm", "run", "sync"]
+            },
+            {
+                "name": "cleanup",
+                "schedule": "0 0 * * *",
+                "suspend": False,
+                "cmd": ["npm", "run", "cleanup"]
+            }
+        ]
     )
 
     @validator('microservice_name')
@@ -200,12 +208,14 @@ class GitOpsManifestRequest(BaseModel):
                 "argoCdAppName": "user-service-dev",
                 "domainName": "api.example.com",
                 "envContent": "LOG_LEVEL=debug\nNODE_ENV=development\nDATABASE_URL=postgresql://localhost:5432/db",
-                "cronjob": {
-                    "name": "data-sync",
-                    "schedule": "0 2 * * *",
-                    "suspend": False,
-                    "cmd": ["npm", "run", "sync"]
-                }
+                "cronjobs": [
+                    {
+                        "name": "data-sync",
+                        "schedule": "0 2 * * *",
+                        "suspend": False,
+                        "cmd": ["npm", "run", "sync"]
+                    }
+                ]
             }
         }
 
@@ -266,9 +276,9 @@ class GitOpsManifestResponse(BaseModel):
         description="Parsed environment variables from env_content"
     )
 
-    cronjob: Optional[Dict[str, Any]] = Field(
+    cronjobs: Optional[List[Dict[str, Any]]] = Field(
         default=None,
-        description="CronJob configuration if provided in the request"
+        description="CronJobs configurations if provided in the request"
     )
 
     timestamp: datetime = Field(
@@ -296,12 +306,14 @@ class GitOpsManifestResponse(BaseModel):
                     "MICRO_SERVICE_NAME": "user-service",
                     "CONTAINER_PORT": "8080"
                 },
-                "cronjob": {
-                    "name": "data-sync",
-                    "schedule": "0 2 * * *",
-                    "suspend": False,
-                    "cmd": ["npm", "run", "sync"]
-                },
+                "cronjobs": [
+                    {
+                        "name": "data-sync",
+                        "schedule": "0 2 * * *",
+                        "suspend": False,
+                        "cmd": ["npm", "run", "sync"]
+                    }
+                ],
                 "timestamp": "2026-01-19T15:30:00.000000"
             }
         }

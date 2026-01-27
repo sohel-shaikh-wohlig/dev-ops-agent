@@ -1,6 +1,13 @@
 
 import { apiClient } from "@/services/api-client";
 
+export interface CronJobPayload {
+    name: string;
+    schedule: string;
+    suspend: boolean;
+    cmd: string[];
+}
+
 export interface GitOpsMicroservicePayload {
     environment: string;
     microservice_name: string;
@@ -13,6 +20,7 @@ export interface GitOpsMicroservicePayload {
     domain_name: string;
     env_content: string;
     environment_variables?: Array<{ name: string; value: string }>;
+    cronjobs?: CronJobPayload[];
 }
 
 export interface GitOpsMicroserviceResponse {
