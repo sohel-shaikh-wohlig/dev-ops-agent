@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, GitGraph, Loader2, Terminal, Clock, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, GitGraph, Loader2, Terminal, Clock, Plus, Trash2, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
@@ -28,6 +28,7 @@ import {
   createGitOpsMicroserviceStream,
   type GitOpsMicroservicePayload,
   type CronJobPayload,
+  type WorkerPayload,
   type LogEntry,
 } from "./services/gitops-service";
 
@@ -86,6 +87,15 @@ export function GitOpsPage() {
         suspend: boolean;
         cmd: string;
       }[],
+      // Workers Array
+      // Worker Configuration (Single)
+      enableWorker: false,
+      worker: {
+        name: "language-translation",
+        workerType: "languageTranslation",
+        secrets: "vertex_ai, bq",
+        additionalEnv: ""
+      }
     },
     validators: {
       onSubmit: ({ value }) => {
@@ -150,6 +160,22 @@ export function GitOpsPage() {
           }
         }
 
+        // Worker Validation (Only if enabled)
+        if (value.enableWorker) {
+          if (!value.worker.name) return "Worker Name is required";
+          if (!value.worker.workerType) return "Worker Type is required";
+          if (!value.worker.secrets) return "At least one secret is required";
+
+          if (value.worker.additionalEnv) {
+            const lines = value.worker.additionalEnv.split("\n");
+            for (const line of lines) {
+              if (line.trim() && !/^[A-Z_0-9]+=[^\n]+$/.test(line)) {
+                return `Worker Env: Invalid format at "${line}". Expected KEY=VALUE`;
+              }
+            }
+          }
+        }
+
         return undefined;
       },
     },
@@ -180,6 +206,27 @@ export function GitOpsPage() {
           }));
         }
 
+        let workerPayload: WorkerPayload | undefined = undefined;
+        if (value.enableWorker) {
+          const additionalEnvRecord: Record<string, string> = {};
+          if (value.worker.additionalEnv) {
+            value.worker.additionalEnv.split("\n").forEach((line) => {
+              const trimmed = line.trim();
+              if (trimmed) {
+                const [name, ...rest] = trimmed.split("=");
+                additionalEnvRecord[name] = rest.join("=");
+              }
+            });
+          }
+
+          workerPayload = {
+            name: value.worker.name,
+            workerType: value.worker.workerType,
+            secrets: value.worker.secrets.split(",").map(s => s.trim()).filter(Boolean),
+            additionalEnv: Object.keys(additionalEnvRecord).length > 0 ? additionalEnvRecord : undefined
+          };
+        }
+
         const payload: GitOpsMicroservicePayload = {
           environment: value.environment,
           microservice_name: value.microserviceName,
@@ -192,7 +239,8 @@ export function GitOpsPage() {
           domain_name: value.domainName,
           env_content: value.envContent,
           environment_variables: envVars,
-          cronjobs: cronJobsPayload
+          cronjobs: cronJobsPayload,
+          worker: workerPayload
         };
 
         await createGitOpsMicroserviceStream(
@@ -626,6 +674,109 @@ export function GitOpsPage() {
                   </div>
                 )}
               />
+            </div>
+
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <Label className="text-base flex items-center gap-2">
+                  <Briefcase className="w-4 h-4" />
+                  Workers
+                </Label>
+              </div>
+
+              <div className="space-y-4 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base flex items-center gap-2">
+                    <Briefcase className="w-4 h-4" />
+                    Worker Configuration
+                  </Label>
+                  <form.Field
+                    name="enableWorker"
+                    children={(field) => (
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={field.state.value}
+                          onCheckedChange={field.handleChange}
+                        />
+                        <Label>Enable Worker</Label>
+                      </div>
+                    )}
+                  />
+                </div>
+
+                <form.Field
+                  name="enableWorker"
+                  children={(field) => (
+                    <>
+                      {field.state.value && (
+                        <Card className="p-4 bg-muted/20">
+                          <div className="grid grid-cols-2 gap-4">
+                            <form.Field
+                              name="worker.name"
+                              children={(subField) => (
+                                <div className="space-y-2">
+                                  <Label>Worker Name</Label>
+                                  <Input
+                                    value={subField.state.value}
+                                    onChange={(e) => subField.handleChange(e.target.value)}
+                                    placeholder="language-translation"
+                                  />
+                                </div>
+                              )}
+                            />
+                            <form.Field
+                              name="worker.workerType"
+                              children={(subField) => (
+                                <div className="space-y-2">
+                                  <Label>Worker Type</Label>
+                                  <Input
+                                    value={subField.state.value}
+                                    onChange={(e) => subField.handleChange(e.target.value)}
+                                    placeholder="languageTranslation"
+                                  />
+                                </div>
+                              )}
+                            />
+                            <form.Field
+                              name="worker.secrets"
+                              children={(subField) => (
+                                <div className="space-y-2 col-span-2">
+                                  <Label>Secrets (comma separated)</Label>
+                                  <Input
+                                    value={subField.state.value}
+                                    onChange={(e) => subField.handleChange(e.target.value)}
+                                    placeholder="vertex_ai, bq"
+                                  />
+                                  <p className="text-xs text-muted-foreground">
+                                    Supported: vertex_ai, bq
+                                  </p>
+                                </div>
+                              )}
+                            />
+                            <form.Field
+                              name="worker.additionalEnv"
+                              children={(subField) => (
+                                <div className="space-y-2 col-span-2">
+                                  <Label>Additional Environment Variables</Label>
+                                  <Textarea
+                                    value={subField.state.value}
+                                    onChange={(e) => subField.handleChange(e.target.value)}
+                                    placeholder="BATCH_SIZE=100"
+                                    className="font-mono min-h-[100px]"
+                                  />
+                                  <p className="text-xs text-muted-foreground">
+                                    Format: KEY=VALUE (one per line)
+                                  </p>
+                                </div>
+                              )}
+                            />
+                          </div>
+                        </Card>
+                      )}
+                    </>
+                  )}
+                />
+              </div>
             </div>
 
             <form.Field

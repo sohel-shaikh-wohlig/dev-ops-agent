@@ -8,6 +8,13 @@ export interface CronJobPayload {
     cmd: string[];
 }
 
+export interface WorkerPayload {
+    name: string;
+    workerType: string;
+    secrets: string[];
+    additionalEnv?: Record<string, string>;
+}
+
 export interface GitOpsMicroservicePayload {
     environment: string;
     microservice_name: string;
@@ -21,6 +28,7 @@ export interface GitOpsMicroservicePayload {
     env_content: string;
     environment_variables?: Array<{ name: string; value: string }>;
     cronjobs?: CronJobPayload[];
+    worker?: WorkerPayload;
 }
 
 export interface GitOpsMicroserviceResponse {
@@ -64,7 +72,20 @@ export const createGitOpsMicroserviceStream = async (
             let errorMessage = response.statusText;
             try {
                 const errorData = await response.json();
-                errorMessage = errorData.detail || errorData.message || errorMessage;
+                if (errorData.detail) {
+                    if (typeof errorData.detail === 'string') {
+                        errorMessage = errorData.detail;
+                    } else if (Array.isArray(errorData.detail)) {
+                        // Format Pydantic/FastAPI validation errors
+                        errorMessage = errorData.detail
+                            .map((e: any) => `${e.loc && e.loc.length > 0 ? e.loc[e.loc.length - 1] : 'Error'}: ${e.msg}`)
+                            .join('\n');
+                    } else {
+                        errorMessage = JSON.stringify(errorData.detail);
+                    }
+                } else if (errorData.message) {
+                    errorMessage = errorData.message;
+                }
             } catch (e) {
                 // Ignore json parse error
             }
