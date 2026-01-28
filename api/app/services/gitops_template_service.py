@@ -39,6 +39,10 @@ class GitOpsTemplateService:
     PLACEHOLDER_CRONJOBS_YAML = "{{CRONJOBS_YAML}}"
     PLACEHOLDER_CRONJOBS_COUNT = "{{CRONJOBS_COUNT}}"
 
+    # Worker placeholders (optional worker deployment)
+    PLACEHOLDER_WORKER_YAML = "{{WORKER_YAML}}"
+    PLACEHOLDER_WORKER_COUNT = "{{WORKER_COUNT}}"
+
     def __init__(
         self,
         template_dir: Optional[Path] = None,
@@ -388,6 +392,262 @@ class GitOpsTemplateService:
         logger.info(f"Generated {len(generated_files)} individual cronjob manifest files")
         return generated_files
 
+    def format_worker_yaml(self, worker: Dict[str, Any], indent: int = 0) -> str:
+        """
+        Format worker configuration as YAML for values.yaml.
+
+        Generates values for worker deployment:
+            WORKER_LANGUAGE_TRANSLATION_NAME: "worker-language-translation"
+            worker:
+              enabled: true
+
+        Note:
+        - WORKER_LANGUAGE_TRANSLATION (workerType) is added to config section via env_vars
+        - Secret names are dynamic based on microservice name:
+          - Vertex AI: {microservice_name}-ai
+          - BigQuery: {microservice_name}-bq-creds
+
+        Args:
+            worker: Dictionary containing worker configuration
+                Expected keys: name, worker_type, secrets, additional_env
+            indent: Number of spaces for base indentation
+
+        Returns:
+            YAML formatted worker section string.
+            Returns empty string if worker is None or empty.
+        """
+        if not worker:
+            return ""
+
+        indent_str = " " * indent
+        lines = []
+
+        # Get worker configuration
+        name = worker.get('name', 'language-translation')
+        worker_full_name = f"worker-{name}"
+
+        # Add WORKER_LANGUAGE_TRANSLATION_NAME at root level (used by template for deployment name)
+        lines.append(f"{indent_str}WORKER_LANGUAGE_TRANSLATION_NAME: \"{worker_full_name}\"")
+
+        # Add worker section (secrets are now dynamic based on microservice name)
+        lines.append(f"{indent_str}worker:")
+        lines.append(f"{indent_str}  enabled: true")
+
+        return '\n'.join(lines)
+
+    def generate_worker_manifest(
+        self,
+        worker: Dict[str, Any],
+        template_content: str,
+        output_dir: Path,
+        base_replacements: Dict[str, str]
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate worker manifest file from the worker configuration.
+
+        Creates a manifest file named 'worker-{name}.yaml' with conditional
+        secret volumes and env vars based on the 'secrets' field:
+        - If 'vertex_ai' in secrets: includes vertex-ai-credentials-volume and GOOGLE_APPLICATION_CREDENTIALS env
+        - If 'bq' in secrets: includes bq-credentials-volume and BQ_* env vars
+        - If neither: removes these volumes and env vars to avoid deployment errors
+
+        Args:
+            worker: Worker configuration dictionary
+            template_content: Content of the worker.yaml template
+            output_dir: Directory to write the generated manifest file
+            base_replacements: Base replacement map for common placeholders
+
+        Returns:
+            List with a single dictionary containing info about the generated file
+        """
+        if not worker:
+            return []
+
+        generated_files = []
+
+        worker_name = worker.get('name', 'language-translation')
+        output_filename = f"worker-{worker_name}.yaml"
+        output_file = output_dir / output_filename
+
+        logger.info(f"Generating worker manifest: {output_filename}")
+
+        # Get enabled secrets (normalize to lowercase for comparison)
+        secrets = worker.get('secrets', []) or []
+        secrets_lower = [s.lower() for s in secrets]
+        enable_vertex_ai = 'vertex_ai' in secrets_lower or 'vertexai' in secrets_lower
+        enable_bq = 'bq' in secrets_lower or 'bigquery' in secrets_lower
+
+        logger.info(f"Worker secrets configuration - Vertex AI: {enable_vertex_ai}, BigQuery: {enable_bq}")
+
+        # Build the worker manifest dynamically based on enabled secrets
+        worker_content = self._build_worker_manifest(
+            worker=worker,
+            enable_vertex_ai=enable_vertex_ai,
+            enable_bq=enable_bq
+        )
+
+        # Apply base replacements for other placeholders (namespace, image, etc.)
+        replacement_count = 0
+        for placeholder, value in base_replacements.items():
+            count = worker_content.count(placeholder)
+            if count > 0:
+                worker_content = worker_content.replace(placeholder, value)
+                replacement_count += count
+
+        # Ensure output directory exists
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write the generated manifest
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(worker_content)
+
+        generated_files.append({
+            'source_path': 'template/git-ops/templates/worker.yaml',
+            'output_path': str(output_file),
+            'worker_name': worker_name,
+            'secrets_enabled': secrets,
+            'replacements_made': replacement_count
+        })
+
+        logger.info(f"Generated worker manifest: {output_file}")
+        logger.info(f"Generated {len(generated_files)} worker manifest file")
+        return generated_files
+
+    def _build_worker_manifest(
+        self,
+        worker: Dict[str, Any],
+        enable_vertex_ai: bool,
+        enable_bq: bool
+    ) -> str:
+        """
+        Build worker manifest YAML with conditional secrets.
+
+        Args:
+            worker: Worker configuration dictionary
+            enable_vertex_ai: Whether to include Vertex AI credential volumes/env
+            enable_bq: Whether to include BigQuery credential volumes/env
+
+        Returns:
+            Complete worker manifest YAML string
+        """
+        # Build env section (no hardcoded suffixes - dynamic based on secrets)
+        env_lines = [
+            "          env:",
+            "            - name: NODE_ENV",
+            "              value: {{ .Values.config.NODE_ENV | quote }}",
+            "            - name: WORKER_TYPE",
+            "              value: {{ .Values.config.WORKER_LANGUAGE_TRANSLATION | quote }}",
+        ]
+
+        # Add Vertex AI credential env var only if enabled
+        if enable_vertex_ai:
+            env_lines.append("            - name: GOOGLE_APPLICATION_CREDENTIALS")
+            env_lines.append("              value: /etc/ai-credentials/credentials.json")
+
+        # Add BigQuery credential env vars only if enabled
+        if enable_bq:
+            env_lines.append("            - name: BQ_DATASET_KEY")
+            env_lines.append("              value: /etc/credentials/bq_credentials.json")
+            env_lines.append("            - name: BQ_PORTFOLIO_DATASET_KEY")
+            env_lines.append("              value: /etc/credentials/bq_avs_credentials.json")
+
+        # Build volumeMounts section
+        volume_mounts_lines = [
+            "          volumeMounts:",
+            "            - name: db-certs",
+            "              mountPath: /app/certs",
+            "              readOnly: true",
+        ]
+
+        if enable_vertex_ai:
+            volume_mounts_lines.extend([
+                "            - name: vertex-ai-credentials-volume",
+                "              mountPath: /etc/ai-credentials",
+                "              readOnly: true",
+            ])
+
+        if enable_bq:
+            volume_mounts_lines.extend([
+                "            - name: bq-credentials-volume",
+                "              mountPath: /etc/credentials",
+                "              readOnly: true",
+            ])
+
+        # Build volumes section
+        volumes_lines = [
+            "      volumes:",
+        ]
+
+        if enable_vertex_ai:
+            volumes_lines.extend([
+                "        - name: vertex-ai-credentials-volume",
+                "          secret:",
+                "            secretName: {{MICRO_SERVICE_NAME}}-ai",
+                "            items:",
+                "              - key: credentials.json",
+                "                path: credentials.json",
+            ])
+
+        if enable_bq:
+            volumes_lines.extend([
+                "        - name: bq-credentials-volume",
+                "          secret:",
+                "            secretName: {{MICRO_SERVICE_NAME}}-bq-creds",
+                "            items:",
+                "              - key: bq_credentials.json",
+                "                path: bq_credentials.json",
+                "              - key: bq_avs_credentials.json",
+                "                path: bq_avs_credentials.json",
+            ])
+
+        # Always include db-certs volume
+        volumes_lines.extend([
+            "        - name: db-certs",
+            "          secret:",
+            "            secretName: db-certs",
+            "            defaultMode: 400",
+        ])
+
+        # Assemble the full manifest
+        manifest = f"""kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: {{{{ .Values.WORKER_LANGUAGE_TRANSLATION_NAME | quote }}}}
+  annotations:
+    repoUrl: {{{{ .Values.annotations.repoUrl | quote }}}}
+  labels:
+    application: {{{{ .Values.labels.application }}}}
+    env: {{{{ .Values.labels.env }}}}
+spec:
+  replicas: {{{{ .Values.replicasCount }}}}
+  selector:
+    matchLabels:
+      app: {{{{ .Values.WORKER_LANGUAGE_TRANSLATION_NAME | quote }}}}
+  template:
+    metadata:
+      labels:
+        app: {{{{ .Values.WORKER_LANGUAGE_TRANSLATION_NAME | quote }}}}
+      annotations:
+        linkerd.io/inject: disabled
+    spec:
+      containers:
+        - name: {{{{ .Values.WORKER_LANGUAGE_TRANSLATION_NAME | quote }}}}
+          image: {{{{ .Values.image.name }}}}:{{{{ .Values.image.tag }}}}
+          ports:
+            - containerPort: {{{{ .Values.containerPort }}}}
+              protocol: TCP
+          imagePullPolicy: {{{{ .Values.image.pullPolicy }}}}
+{chr(10).join(env_lines)}
+          envFrom:
+            - configMapRef:
+                name: {{{{ .Values.name }}}}
+          resources:
+            {{{{- toYaml .Values.resources | nindent 12 }}}}
+{chr(10).join(volume_mounts_lines)}
+{chr(10).join(volumes_lines)}
+"""
+        return manifest
+
     def build_replacement_map(
         self,
         microservice_name: str,
@@ -401,7 +661,8 @@ class GitOpsTemplateService:
         argocd_app_name: str,
         gitops_repo_url: str,
         env_content: Optional[str] = None,
-        cronjobs: Optional[List[Dict[str, Any]]] = None
+        cronjobs: Optional[List[Dict[str, Any]]] = None,
+        worker: Optional[Dict[str, Any]] = None
     ) -> Tuple[Dict[str, str], Dict[str, str]]:
         """
         Build the replacement map for template processing
@@ -418,6 +679,7 @@ class GitOpsTemplateService:
             gitops_repo_url: GitOps repository URL
             env_content: Optional .env file content (KEY=VALUE pairs)
             cronjobs: Optional list of cronjob configurations, each with keys: name, schedule, suspend, cmd
+            worker: Optional worker configuration with keys: name, worker_type, vertex_ai_secret, bigquery_secret, additional_env
 
         Returns:
             Tuple of (replacements dict, parsed env_vars dict)
@@ -476,6 +738,53 @@ class GitOpsTemplateService:
             replacements[self.PLACEHOLDER_CRONJOBS_COUNT] = "0"
             logger.info("CronJobs placeholder set to empty string, CRONJOBS_COUNT set to 0")
 
+        # Add worker configuration placeholders if provided
+        if worker:
+            logger.info("=== Processing Worker Configuration ===")
+            worker_name = worker.get('name', 'language-translation')
+            worker_type = worker.get('worker_type', worker.get('workerType', 'languageTranslation'))
+            secrets = worker.get('secrets', []) or []
+            vertex_ai_secret = worker.get('vertex_ai_secret', worker.get('vertexAiSecret', ''))
+            bigquery_secret = worker.get('bigquery_secret', worker.get('bigquerySecret', ''))
+            additional_env = worker.get('additional_env', worker.get('additionalEnv', {}))
+
+            logger.info(f"Worker name: {worker_name}")
+            logger.info(f"Worker type: {worker_type}")
+            logger.info(f"Enabled secrets: {secrets}")
+            logger.info(f"Vertex AI secret: {vertex_ai_secret}")
+            logger.info(f"BigQuery secret: {bigquery_secret}")
+            logger.info(f"Additional env: {additional_env}")
+
+            # Add WORKER_LANGUAGE_TRANSLATION to env_vars for config.data section
+            # This maps worker.workerType -> config.data.WORKER_LANGUAGE_TRANSLATION
+            env_vars['WORKER_LANGUAGE_TRANSLATION'] = worker_type
+            logger.info(f"Added WORKER_LANGUAGE_TRANSLATION={worker_type} to config.data section")
+
+            # Add additional_env variables to env_vars for config section in values.yaml ONLY
+            # These will be added to the config: section in values.yaml but NOT to configmap.yaml
+            # The configmap already references values.yaml via {{ .Values.config.KEY | quote }}
+            if additional_env:
+                for key, value in additional_env.items():
+                    env_vars[key] = value
+                    logger.info(f"Added {key}={value} to values.yaml config section only")
+
+            # Re-generate ONLY the values.yaml placeholder with the additional worker config values
+            # DO NOT regenerate configmap placeholder - additional_env should only be in values.yaml
+            replacements[self.PLACEHOLDER_ENVIRONMENT_VARIABLES_YAML] = self.format_env_vars_values_yaml(env_vars)
+
+            # Full worker YAML section for values.yaml
+            replacements[self.PLACEHOLDER_WORKER_YAML] = self.format_worker_yaml(worker)
+            # Set WORKER_COUNT to 1 (single worker per request)
+            replacements[self.PLACEHOLDER_WORKER_COUNT] = "1"
+            logger.info("Worker placeholders added to replacement map")
+        else:
+            logger.info("=== Worker Configuration: Not Provided ===")
+            logger.info("Skipping worker setup - no worker data in request")
+            # If no worker provided, set empty placeholders
+            replacements[self.PLACEHOLDER_WORKER_YAML] = ""
+            replacements[self.PLACEHOLDER_WORKER_COUNT] = "0"
+            logger.info("Worker placeholder set to empty string, WORKER_COUNT set to 0")
+
         logger.info(f"Built replacement map with {len(replacements)} variables")
         logger.info(f"Parsed {len(env_vars)} environment variables from env_content")
         return replacements, env_vars
@@ -520,7 +829,8 @@ class GitOpsTemplateService:
         argocd_app_name: str,
         gitops_repo_url: str,
         env_content: Optional[str] = None,
-        cronjobs: Optional[List[Dict[str, Any]]] = None
+        cronjobs: Optional[List[Dict[str, Any]]] = None,
+        worker: Optional[Dict[str, Any]] = None
     ) -> Dict:
         """
         Process all template files with variable substitution
@@ -539,6 +849,8 @@ class GitOpsTemplateService:
             env_content: Optional .env file content (KEY=VALUE pairs, same as ConfigMap)
             cronjobs: Optional list of cronjob configurations, each with keys: name, schedule, suspend, cmd.
                       If None or empty, cronjob template files will be skipped.
+            worker: Optional worker configuration with keys: name, worker_type, vertex_ai_secret, bigquery_secret, additional_env.
+                    If None, worker template files will be skipped.
 
         Returns:
             Dictionary with processing results
@@ -576,7 +888,8 @@ class GitOpsTemplateService:
             argocd_app_name=argocd_app_name,
             gitops_repo_url=gitops_repo_url,
             env_content=env_content,
-            cronjobs=cronjobs
+            cronjobs=cronjobs,
+            worker=worker
         )
 
         # Get template files
@@ -597,6 +910,36 @@ class GitOpsTemplateService:
                     else:
                         logger.info(f"Skipping {relative_path} - will generate individual cronjob manifests")
                     continue
+
+                # Skip worker.yaml from regular processing - we generate individual files separately
+                if template_file.name == 'worker.yaml':
+                    if not worker:
+                        logger.info(f"Skipping {relative_path} - no worker configuration provided")
+                    else:
+                        logger.info(f"Skipping {relative_path} - will generate individual worker manifest")
+                    continue
+
+                # Skip vertex-ai-secret.yaml if worker not provided or 'vertex_ai' not in secrets
+                if template_file.name == 'vertex-ai-secret.yaml':
+                    if not worker:
+                        logger.info(f"Skipping {relative_path} - no worker configuration provided")
+                        continue
+                    worker_secrets = worker.get('secrets', []) or []
+                    secrets_lower = [s.lower() for s in worker_secrets]
+                    if 'vertex_ai' not in secrets_lower and 'vertexai' not in secrets_lower:
+                        logger.info(f"Skipping {relative_path} - 'vertex_ai' not in worker secrets")
+                        continue
+
+                # Skip bigquery-secret.yaml if worker not provided or 'bq' not in secrets
+                if template_file.name == 'bigquery-secret.yaml':
+                    if not worker:
+                        logger.info(f"Skipping {relative_path} - no worker configuration provided")
+                        continue
+                    worker_secrets = worker.get('secrets', []) or []
+                    secrets_lower = [s.lower() for s in worker_secrets]
+                    if 'bq' not in secrets_lower and 'bigquery' not in secrets_lower:
+                        logger.info(f"Skipping {relative_path} - 'bq' not in worker secrets")
+                        continue
 
                 # Insert microservice_name after the template folder (git-ops or github)
                 # Structure: output_base_dir/git-ops/microservice_name/values.yaml
@@ -682,6 +1025,39 @@ class GitOpsTemplateService:
             else:
                 logger.warning(f"CronJob template not found at: {cronjob_template_path}")
 
+        # Generate worker manifest file if worker is provided
+        if worker:
+            logger.info(f"=== Generating Worker Manifest ===")
+
+            # Find the worker.yaml template
+            worker_template_path = self.template_dir / "git-ops" / "templates" / "worker.yaml"
+
+            if worker_template_path.exists():
+                # Read the worker template
+                with open(worker_template_path, 'r', encoding='utf-8') as f:
+                    worker_template_content = f.read()
+
+                # Output directory for worker manifest (same as other templates)
+                worker_output_dir = self.output_base_dir / "git-ops" / microservice_name / "templates"
+
+                # Convert worker to dict if it's a Pydantic model
+                worker_dict = worker.dict() if hasattr(worker, 'dict') else worker
+
+                # Generate worker manifest
+                worker_files = self.generate_worker_manifest(
+                    worker=worker_dict,
+                    template_content=worker_template_content,
+                    output_dir=worker_output_dir,
+                    base_replacements=replacements
+                )
+
+                # Add generated worker file to processed files list
+                processed_files.extend(worker_files)
+
+                logger.info(f"Generated {len(worker_files)} worker manifest file")
+            else:
+                logger.warning(f"Worker template not found at: {worker_template_path}")
+
         logger.info(f"=== GitOps Template Processing Complete ===")
         logger.info(f"Total files processed: {len(processed_files)}")
 
@@ -689,13 +1065,15 @@ class GitOpsTemplateService:
         readable_replacements = {
             k.replace("{{", "").replace("}}", ""): v
             for k, v in replacements.items()
-            # Exclude the formatted env var and cronjobs blocks from the simple variables list
+            # Exclude the formatted env var, cronjobs, and worker blocks from the simple variables list
             if k not in [
                 self.PLACEHOLDER_ENVIRONMENT_VARIABLES,
                 self.PLACEHOLDER_ENVIRONMENT_VARIABLES_YAML,
                 self.PLACEHOLDER_ENVIRONMENT_VARIABLES_CONFIGMAP,
                 self.PLACEHOLDER_CRONJOBS_YAML,
-                self.PLACEHOLDER_CRONJOBS_COUNT
+                self.PLACEHOLDER_CRONJOBS_COUNT,
+                self.PLACEHOLDER_WORKER_YAML,
+                self.PLACEHOLDER_WORKER_COUNT
             ]
         }
 
@@ -705,7 +1083,8 @@ class GitOpsTemplateService:
             'total_files_processed': len(processed_files),
             'template_variables': readable_replacements,
             'environment_variables': env_vars,
-            'cronjobs': cronjobs
+            'cronjobs': cronjobs,
+            'worker': worker
         }
 
     def cleanup_output(self, microservice_name: str) -> None:

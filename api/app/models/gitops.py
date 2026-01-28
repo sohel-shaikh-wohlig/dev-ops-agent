@@ -53,6 +53,76 @@ class CronJobConfig(BaseModel):
         }
 
 
+class WorkerConfig(BaseModel):
+    """
+    Configuration model for Worker deployment settings
+
+    Defines the worker deployment with conditional secrets for Vertex AI and BigQuery,
+    plus additional environment variables.
+    """
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Name of the worker deployment",
+        example="language-translation"
+    )
+
+    worker_type: str = Field(
+        ...,
+        alias="workerType",
+        min_length=1,
+        max_length=100,
+        description="Type identifier for the worker (used in WORKER_TYPE env var)",
+        example="languageTranslation"
+    )
+
+    secrets: Optional[List[str]] = Field(
+        default=None,
+        description="List of secrets to enable. Options: 'vertex_ai' for Vertex AI credentials, "
+                    "'bq' for BigQuery credentials. If empty or null, no credential volumes are mounted.",
+        example=["vertex_ai", "bq"]
+    )
+
+    vertex_ai_secret: str = Field(
+        default="equity-api-ai",
+        alias="vertexAiSecret",
+        description="Name of the Kubernetes secret containing Vertex AI credentials (used if 'vertex_ai' is in secrets)",
+        example="equity-api-ai"
+    )
+
+    bigquery_secret: str = Field(
+        default="equity-api-cred",
+        alias="bigquerySecret",
+        description="Name of the Kubernetes secret containing BigQuery credentials (used if 'bq' is in secrets)",
+        example="equity-api-cred"
+    )
+
+    additional_env: Optional[Dict[str, str]] = Field(
+        default=None,
+        alias="additionalEnv",
+        description="Additional environment variables to pass to the worker as key-value pairs. "
+                    "These will be added to the config section in values.yaml.",
+        example={"BATCH_SIZE": "100", "MAX_RETRIES": "3"}
+    )
+
+    class Config:
+        populate_by_name = True
+        json_schema_extra = {
+            "example": {
+                "name": "language-translation",
+                "workerType": "languageTranslation",
+                "secrets": ["vertex_ai", "bq"],
+                "vertexAiSecret": "equity-api-ai",
+                "bigquerySecret": "equity-api-cred",
+                "additionalEnv": {
+                    "BATCH_SIZE": "100",
+                    "MAX_RETRIES": "3"
+                }
+            }
+        }
+
+
 class GitOpsManifestRequest(BaseModel):
     """
     Request model for GitOps manifest generation
@@ -154,6 +224,22 @@ class GitOpsManifestRequest(BaseModel):
                 "cmd": ["npm", "run", "cleanup"]
             }
         ]
+    )
+
+    worker: Optional[WorkerConfig] = Field(
+        default=None,
+        description="Optional Worker deployment configuration. If provided, a worker deployment will be included "
+                    "with Vertex AI and BigQuery secret mounts. If null, no worker will be configured.",
+        example={
+            "name": "language-translation",
+            "workerType": "LANGUAGE_TRANSLATION",
+            "vertexAiSecret": "equity-api-ai",
+            "bigquerySecret": "equity-api-cred",
+            "additionalEnv": {
+                "BATCH_SIZE": "100",
+                "MAX_RETRIES": "3"
+            }
+        }
     )
 
     @validator('microservice_name')
@@ -279,6 +365,11 @@ class GitOpsManifestResponse(BaseModel):
     cronjobs: Optional[List[Dict[str, Any]]] = Field(
         default=None,
         description="CronJobs configurations if provided in the request"
+    )
+
+    worker: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Worker configuration if provided in the request"
     )
 
     timestamp: datetime = Field(
