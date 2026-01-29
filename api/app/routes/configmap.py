@@ -14,13 +14,16 @@ from app.models.configmap import (
     ConfigMapPreviewRequest,
     ConfigMapPreviewResponse,
     ConfigMapApplyChangesRequest,
+    ConfigValuesResponse,
 )
+from app.services.configmap_service import get_values_from_gitops, mask_sensitive_values
 
 from app.models.common import ErrorResponse
 from app.services.argocd_service import ArgoCDService
 from app.core.logging_config import logger
 
 router = APIRouter(prefix="/configmap", tags=["ConfigMap Configuration"])
+gitops_router = APIRouter(prefix="/gitops", tags=["GitOps Configuration"])
 
 
 @router.post(
@@ -145,6 +148,70 @@ async def apply_previewed_changes(request: ConfigMapApplyChangesRequest):
             detail=f"Failed to apply changes: {str(e)}"
         )
 
+
+@gitops_router.get(
+    "/config-values",
+    response_model=ConfigValuesResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Configuration Values from GitOps Repository",
+    description="Retrieve the 'config' block from values.yaml for a microservice in a specific environment",
+    responses={
+        404: {"model": ErrorResponse, "description": "Branch or values.yaml file not found"},
+        500: {"model": ErrorResponse, "description": "Git authentication or connection error"}
+    }
+)
+async def get_config_values(
+    microservice_name: str,
+    env: str
+):
+    """
+    **Get Configuration Values from GitOps Repository**
+
+    Fetches the 'config' block from the values.yaml file for a specified microservice.
+
+    **Parameters:**
+    - **microservice_name**: Name of the microservice (matches directory name in GitOps repo)
+    - **env**: Environment name, used as the Git branch (e.g., 'development', 'staging', 'production')
+
+    **Returns:**
+    - The 'config' block from `{microservice_name}/values.yaml`
+    - Empty dict if the 'config' block doesn't exist
+
+    **Errors:**
+    - 404: Branch doesn't exist or values.yaml not found
+    - 500: Git authentication or connection errors
+    """
+    try:
+        logger.info(f"Fetching config values for {microservice_name} from branch {env}")
+
+        config = get_values_from_gitops(microservice_name, env)
+
+        logger.info(f"Successfully retrieved config for {microservice_name} ({len(config)} keys)")
+
+        # Mask sensitive values before returning (SECRET, KEY, TOKEN, PASSWORD, CREDENTIAL)
+        masked_config = mask_sensitive_values(config)
+
+        return ConfigValuesResponse(
+            status="success",
+            microservice=microservice_name,
+            environment=env,
+            config=masked_config
+        )
+
+    except ValueError as e:
+        # Branch or file not found - return 404
+        logger.warning(f"Not found error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        # Git authentication/connection errors or other internal errors - return 500
+        logger.error(f"Failed to get config values: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve configuration values: {str(e)}"
+        )
 
 
 async def gitops_service_health(

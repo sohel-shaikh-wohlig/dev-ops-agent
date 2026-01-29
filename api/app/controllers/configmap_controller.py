@@ -98,13 +98,13 @@ class ConfigMapController:
             
             logger.info(f"Parsed {len(env_vars)} environment variables")
             
-            # Step 5: Apply configuration changes
+            # Step 5: Apply configuration changes with change detection
             logger.info("Step 5: Applying configuration changes...")
-            changes = config_service.apply_changes(env_vars)
-            
-            if not changes:
+            changes, has_actual_changes = config_service.apply_changes(env_vars)
+
+            if not has_actual_changes:
                 logger.info("No changes detected - all values already up to date")
-            
+
             # Convert changes to response format
             change_details = [
                 ConfigChangeDetail(
@@ -116,22 +116,29 @@ class ConfigMapController:
                 )
                 for c in changes
             ]
-            
-            # Prepare response
+
+            # Prepare response with appropriate message
+            summary = config_service.get_changes_summary()
+            if has_actual_changes:
+                message = f"Configuration updated successfully ({summary['actual_changes']} changes applied)"
+            else:
+                message = f"No changes required - all {summary['unchanged']} values are already up to date"
+
             response_data = {
                 'status': 'success',
-                'message': 'Configuration updated successfully',
+                'message': message,
                 'environment': request.environment_name,
                 'microservice': request.microservice_name,
                 'changes': change_details,
-                'summary': config_service.get_changes_summary(),
+                'summary': summary,
                 'git_committed': False,
                 'git_commit_hash': None,
                 'argocd_synced': False
             }
-            
-            # Step 6: Git operations (if auto_commit enabled)
-            if request.auto_commit and changes:
+
+            # Step 6: Git operations (if auto_commit enabled AND there are actual changes)
+            # Skip Git commit/push if all entries are UNCHANGED to avoid empty commits
+            if request.auto_commit and has_actual_changes:
                 logger.info("Step 6: Committing changes to Git...")
                 
                 git_root = git_service.find_git_root(microservice_path)
@@ -341,10 +348,10 @@ class ConfigMapController:
             
             # Initialize config service
             config_service = ConfigMapService(microservice_path)
-            
-            # Apply changes
-            changes = config_service.apply_changes(env_vars)
-            
+
+            # Apply changes with change detection
+            changes, has_actual_changes = config_service.apply_changes(env_vars)
+
             # Convert changes
             change_details = [
                 ConfigChangeDetail(
@@ -356,21 +363,28 @@ class ConfigMapController:
                 )
                 for c in changes
             ]
-            
+
+            # Prepare response with appropriate message
+            summary = config_service.get_changes_summary()
+            if has_actual_changes:
+                message = f"Changes applied successfully ({summary['actual_changes']} changes)"
+            else:
+                message = f"No changes required - all {summary['unchanged']} values are already up to date"
+
             response_data = {
                 'status': 'success',
-                'message': 'Changes applied successfully',
+                'message': message,
                 'environment': 'preview',
                 'microservice': microservice_name,
                 'changes': change_details,
-                'summary': config_service.get_changes_summary(),
+                'summary': summary,
                 'git_committed': False,
                 'git_commit_hash': None,
                 'argocd_synced': False
             }
-            
-            # Git operations if requested
-            if request.auto_commit:
+
+            # Git operations if requested AND there are actual changes
+            if request.auto_commit and has_actual_changes:
                 git_root = git_service.find_git_root(microservice_path)
                 if git_root:
                     # Pull, add, commit, push
