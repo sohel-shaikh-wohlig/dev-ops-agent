@@ -619,3 +619,45 @@ class ConfigMapPreviewResponse(BaseModel):
                 "timestamp": "2026-01-19T10:30:00.000000"
             }
         }
+
+
+class ConfigValuesResponse(BaseModel):
+    """
+    Response model for retrieving config values from GitOps repository
+    """
+    status: str = Field(
+        ...,
+        description="Operation status",
+        example="success"
+    )
+
+    microservice: str = Field(
+        ...,
+        description="Microservice name",
+        example="payment-service"
+    )
+
+    environment: str = Field(
+        ...,
+        description="Environment (branch) name",
+        example="production"
+    )
+
+    config: Dict[str, str] = Field(
+        ...,
+        description="Configuration values from the 'config' block in values.yaml"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status": "success",
+                "microservice": "payment-service",
+                "environment": "production",
+                "config": {
+                    "NODE_ENV": "production",
+                    "API_URL": "https://api.example.com",
+                    "LOG_LEVEL": "info"
+                }
+            }
+        }

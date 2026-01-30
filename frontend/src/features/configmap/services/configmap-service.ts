@@ -39,6 +39,7 @@ export interface UpdateResponse {
     git_committed: boolean;
     argocd_synced: boolean;
     status: string;
+    changes: Change[];
 }
 
 export const previewConfigMap = async (payload: ConfigMapPayload): Promise<PreviewResponse> => {
@@ -47,4 +48,19 @@ export const previewConfigMap = async (payload: ConfigMapPayload): Promise<Previ
 
 export const updateConfigMap = async (payload: ConfigMapPayload): Promise<UpdateResponse> => {
     return apiClient.post<UpdateResponse>('/configmap/update', payload);
+};
+
+export interface ConfigValuesResponse {
+    status: string;
+    microservice: string;
+    environment: string;
+    config: Record<string, string>;
+}
+
+export const fetchConfigMapValues = async (microserviceName: string, env: string): Promise<ConfigValuesResponse> => {
+    const queryParams = new URLSearchParams({
+        microservice_name: microserviceName,
+        env: env
+    }).toString();
+    return apiClient.get<ConfigValuesResponse>(`/gitops/config-values?${queryParams}`);
 };

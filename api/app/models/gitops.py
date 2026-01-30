@@ -53,6 +53,76 @@ class CronJobConfig(BaseModel):
         }
 
 
+class WorkerConfig(BaseModel):
+    """
+    Configuration model for Worker deployment settings
+
+    Defines the worker deployment with conditional secrets for Vertex AI and BigQuery,
+    plus additional environment variables.
+    """
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Name of the worker deployment",
+        example="language-translation"
+    )
+
+    worker_type: str = Field(
+        ...,
+        alias="workerType",
+        min_length=1,
+        max_length=100,
+        description="Type identifier for the worker (used in WORKER_TYPE env var)",
+        example="languageTranslation"
+    )
+
+    secrets: Optional[List[str]] = Field(
+        default=None,
+        description="List of secrets to enable. Options: 'vertex_ai' for Vertex AI credentials, "
+                    "'bq' for BigQuery credentials. If empty or null, no credential volumes are mounted.",
+        example=["vertex_ai", "bq"]
+    )
+
+    vertex_ai_secret: str = Field(
+        default="equity-api-ai",
+        alias="vertexAiSecret",
+        description="Name of the Kubernetes secret containing Vertex AI credentials (used if 'vertex_ai' is in secrets)",
+        example="equity-api-ai"
+    )
+
+    bigquery_secret: str = Field(
+        default="equity-api-cred",
+        alias="bigquerySecret",
+        description="Name of the Kubernetes secret containing BigQuery credentials (used if 'bq' is in secrets)",
+        example="equity-api-cred"
+    )
+
+    additional_env: Optional[Dict[str, str]] = Field(
+        default=None,
+        alias="additionalEnv",
+        description="Additional environment variables to pass to the worker as key-value pairs. "
+                    "These will be added to the config section in values.yaml.",
+        example={"BATCH_SIZE": "100", "MAX_RETRIES": "3"}
+    )
+
+    class Config:
+        populate_by_name = True
+        json_schema_extra = {
+            "example": {
+                "name": "language-translation",
+                "workerType": "languageTranslation",
+                "secrets": ["vertex_ai", "bq"],
+                "vertexAiSecret": "equity-api-ai",
+                "bigquerySecret": "equity-api-cred",
+                "additionalEnv": {
+                    "BATCH_SIZE": "100",
+                    "MAX_RETRIES": "3"
+                }
+            }
+        }
+
+
 class GitOpsManifestRequest(BaseModel):
     """
     Request model for GitOps manifest generation
@@ -136,15 +206,39 @@ class GitOpsManifestRequest(BaseModel):
         example="LOG_LEVEL=debug\nNODE_ENV=development\nDATABASE_URL=postgresql://localhost:5432/db"
     )
 
-    cronjob: Optional[CronJobConfig] = Field(
+    cronjobs: Optional[List[CronJobConfig]] = Field(
         default=None,
-        description="Optional CronJob configuration. If provided, cronjob resources will be included "
-                    "in the generated manifests. If null or omitted, no cronjob will be configured.",
+        description="Optional list of CronJob configurations. If provided, cronjob resources will be included "
+                    "in the generated manifests for each entry. If null or empty, no cronjobs will be configured.",
+        example=[
+            {
+                "name": "data-sync",
+                "schedule": "0 2 * * *",
+                "suspend": False,
+                "cmd": ["npm", "run", "sync"]
+            },
+            {
+                "name": "cleanup",
+                "schedule": "0 0 * * *",
+                "suspend": False,
+                "cmd": ["npm", "run", "cleanup"]
+            }
+        ]
+    )
+
+    worker: Optional[WorkerConfig] = Field(
+        default=None,
+        description="Optional Worker deployment configuration. If provided, a worker deployment will be included "
+                    "with Vertex AI and BigQuery secret mounts. If null, no worker will be configured.",
         example={
-            "name": "data-sync",
-            "schedule": "0 2 * * *",
-            "suspend": False,
-            "cmd": ["npm", "run", "sync"]
+            "name": "language-translation",
+            "workerType": "LANGUAGE_TRANSLATION",
+            "vertexAiSecret": "equity-api-ai",
+            "bigquerySecret": "equity-api-cred",
+            "additionalEnv": {
+                "BATCH_SIZE": "100",
+                "MAX_RETRIES": "3"
+            }
         }
     )
 
@@ -200,12 +294,14 @@ class GitOpsManifestRequest(BaseModel):
                 "argoCdAppName": "user-service-dev",
                 "domainName": "api.example.com",
                 "envContent": "LOG_LEVEL=debug\nNODE_ENV=development\nDATABASE_URL=postgresql://localhost:5432/db",
-                "cronjob": {
-                    "name": "data-sync",
-                    "schedule": "0 2 * * *",
-                    "suspend": False,
-                    "cmd": ["npm", "run", "sync"]
-                }
+                "cronjobs": [
+                    {
+                        "name": "data-sync",
+                        "schedule": "0 2 * * *",
+                        "suspend": False,
+                        "cmd": ["npm", "run", "sync"]
+                    }
+                ]
             }
         }
 
@@ -266,9 +362,14 @@ class GitOpsManifestResponse(BaseModel):
         description="Parsed environment variables from env_content"
     )
 
-    cronjob: Optional[Dict[str, Any]] = Field(
+    cronjobs: Optional[List[Dict[str, Any]]] = Field(
         default=None,
-        description="CronJob configuration if provided in the request"
+        description="CronJobs configurations if provided in the request"
+    )
+
+    worker: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Worker configuration if provided in the request"
     )
 
     timestamp: datetime = Field(
@@ -296,12 +397,14 @@ class GitOpsManifestResponse(BaseModel):
                     "MICRO_SERVICE_NAME": "user-service",
                     "CONTAINER_PORT": "8080"
                 },
-                "cronjob": {
-                    "name": "data-sync",
-                    "schedule": "0 2 * * *",
-                    "suspend": False,
-                    "cmd": ["npm", "run", "sync"]
-                },
+                "cronjobs": [
+                    {
+                        "name": "data-sync",
+                        "schedule": "0 2 * * *",
+                        "suspend": False,
+                        "cmd": ["npm", "run", "sync"]
+                    }
+                ],
                 "timestamp": "2026-01-19T15:30:00.000000"
             }
         }

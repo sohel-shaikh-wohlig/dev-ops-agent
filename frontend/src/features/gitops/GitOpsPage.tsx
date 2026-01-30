@@ -20,12 +20,15 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, GitGraph, Loader2, Terminal } from "lucide-react";
+import { AlertCircle, GitGraph, Loader2, Terminal, Clock, Plus, Trash2, Briefcase } from "lucide-react";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   createGitOpsMicroserviceStream,
   type GitOpsMicroservicePayload,
+  type CronJobPayload,
+  type WorkerPayload,
   type LogEntry,
 } from "./services/gitops-service";
 
@@ -77,6 +80,22 @@ export function GitOpsPage() {
       argoAppName: "",
       domainName: "",
       envContent: "",
+      // CronJobs Array
+      cronJobs: [] as {
+        name: string;
+        schedule: string;
+        suspend: boolean;
+        cmd: string;
+      }[],
+      // Workers Array
+      // Worker Configuration (Single)
+      enableWorker: false,
+      worker: {
+        name: "language-translation",
+        workerType: "languageTranslation",
+        secrets: "vertex_ai, bq",
+        additionalEnv: ""
+      }
     },
     validators: {
       onSubmit: ({ value }) => {
@@ -115,11 +134,6 @@ export function GitOpsPage() {
           return "Container Port must be a number";
         }
 
-        // Domain Validation
-        // if (!/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/.test(value.domainName) && value.domainName !== 'localhost') {
-        //     return "Domain Name must be a valid domain";
-        // }
-
         if (!value.envContent) {
           return "Please provide .env content";
         }
@@ -129,6 +143,35 @@ export function GitOpsPage() {
           for (const line of lines) {
             if (line.trim() && !/^[A-Z_0-9]+=[^\n]+$/.test(line)) {
               return `Invalid format at line: "${line}". Expected KEY=VALUE`;
+            }
+          }
+        }
+
+        // CronJob Validation
+        if (value.cronJobs && value.cronJobs.length > 0) {
+          for (const job of value.cronJobs) {
+            if (!job.name) return "CronJob Name is required";
+            if (!job.schedule) return "Cron Schedule is required";
+            // Basic cron validation
+            if (job.schedule.trim().split(" ").length < 5) {
+              return `Invalid Cron Schedule for ${job.name || 'job'}`;
+            }
+            if (!job.cmd) return "Cron Command is required";
+          }
+        }
+
+        // Worker Validation (Only if enabled)
+        if (value.enableWorker) {
+          if (!value.worker.name) return "Worker Name is required";
+          if (!value.worker.workerType) return "Worker Type is required";
+          if (!value.worker.secrets) return "At least one secret is required";
+
+          if (value.worker.additionalEnv) {
+            const lines = value.worker.additionalEnv.split("\n");
+            for (const line of lines) {
+              if (line.trim() && !/^[A-Z_0-9]+=[^\n]+$/.test(line)) {
+                return `Worker Env: Invalid format at "${line}". Expected KEY=VALUE`;
+              }
             }
           }
         }
@@ -153,6 +196,37 @@ export function GitOpsPage() {
           });
         }
 
+        let cronJobsPayload: CronJobPayload[] | undefined = undefined;
+        if (value.cronJobs && value.cronJobs.length > 0) {
+          cronJobsPayload = value.cronJobs.map(job => ({
+            name: job.name,
+            schedule: job.schedule,
+            suspend: job.suspend,
+            cmd: job.cmd.split(",").map(c => c.trim()).filter(Boolean)
+          }));
+        }
+
+        let workerPayload: WorkerPayload | undefined = undefined;
+        if (value.enableWorker) {
+          const additionalEnvRecord: Record<string, string> = {};
+          if (value.worker.additionalEnv) {
+            value.worker.additionalEnv.split("\n").forEach((line) => {
+              const trimmed = line.trim();
+              if (trimmed) {
+                const [name, ...rest] = trimmed.split("=");
+                additionalEnvRecord[name] = rest.join("=");
+              }
+            });
+          }
+
+          workerPayload = {
+            name: value.worker.name,
+            workerType: value.worker.workerType,
+            secrets: value.worker.secrets.split(",").map(s => s.trim()).filter(Boolean),
+            additionalEnv: Object.keys(additionalEnvRecord).length > 0 ? additionalEnvRecord : undefined
+          };
+        }
+
         const payload: GitOpsMicroservicePayload = {
           environment: value.environment,
           microservice_name: value.microserviceName,
@@ -165,6 +239,8 @@ export function GitOpsPage() {
           domain_name: value.domainName,
           env_content: value.envContent,
           environment_variables: envVars,
+          cronjobs: cronJobsPayload,
+          worker: workerPayload
         };
 
         await createGitOpsMicroserviceStream(
@@ -502,6 +578,207 @@ export function GitOpsPage() {
               />
             </div>
 
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <Label className="text-base flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  CronJobs
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => form.pushFieldValue("cronJobs", { name: "", schedule: "", suspend: false, cmd: "" })}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add CronJob
+                </Button>
+              </div>
+
+              <form.Field
+                name="cronJobs"
+                mode="array"
+                children={(field) => (
+                  <div className="space-y-4">
+                    {field.state.value.map((_, i) => (
+                      <Card key={i} className="p-4 relative bg-muted/20">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-2 right-2 text-destructive hover:bg-destructive/10 h-8 w-8"
+                          onClick={() => field.removeValue(i)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                        <div className="grid grid-cols-2 gap-4 pr-8">
+                          <form.Field
+                            name={`cronJobs[${i}].name`}
+                            children={(subField) => (
+                              <div className="space-y-2">
+                                <Label>Name</Label>
+                                <Input
+                                  value={subField.state.value}
+                                  onChange={(e) => subField.handleChange(e.target.value)}
+                                  placeholder="job-name"
+                                />
+                              </div>
+                            )}
+                          />
+                          <form.Field
+                            name={`cronJobs[${i}].schedule`}
+                            children={(subField) => (
+                              <div className="space-y-2">
+                                <Label>Schedule (Cron)</Label>
+                                <Input
+                                  value={subField.state.value}
+                                  onChange={(e) => subField.handleChange(e.target.value)}
+                                  placeholder="0 2 * * *"
+                                />
+                              </div>
+                            )}
+                          />
+                          <form.Field
+                            name={`cronJobs[${i}].cmd`}
+                            children={(subField) => (
+                              <div className="space-y-2 col-span-2">
+                                <Label>Command (comma separated)</Label>
+                                <Input
+                                  value={subField.state.value}
+                                  onChange={(e) => subField.handleChange(e.target.value)}
+                                  placeholder="npm, run, sync"
+                                />
+                              </div>
+                            )}
+                          />
+                          <form.Field
+                            name={`cronJobs[${i}].suspend`}
+                            children={(subField) => (
+                              <div className="flex items-center space-x-2 pt-2">
+                                <Switch
+                                  checked={subField.state.value}
+                                  onCheckedChange={subField.handleChange}
+                                />
+                                <Label>Suspend</Label>
+                              </div>
+                            )}
+                          />
+                        </div>
+                      </Card>
+                    ))}
+                    {field.state.value.length === 0 && (
+                      <div className="text-sm text-muted-foreground text-center py-6 border border-dashed rounded-lg">
+                        No CronJobs configured. Click "Add CronJob" to create one.
+                      </div>
+                    )}
+                  </div>
+                )}
+              />
+            </div>
+
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <Label className="text-base flex items-center gap-2">
+                  <Briefcase className="w-4 h-4" />
+                  Workers
+                </Label>
+              </div>
+
+              <div className="space-y-4 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base flex items-center gap-2">
+                    <Briefcase className="w-4 h-4" />
+                    Worker Configuration
+                  </Label>
+                  <form.Field
+                    name="enableWorker"
+                    children={(field) => (
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={field.state.value}
+                          onCheckedChange={field.handleChange}
+                        />
+                        <Label>Enable Worker</Label>
+                      </div>
+                    )}
+                  />
+                </div>
+
+                <form.Field
+                  name="enableWorker"
+                  children={(field) => (
+                    <>
+                      {field.state.value && (
+                        <Card className="p-4 bg-muted/20">
+                          <div className="grid grid-cols-2 gap-4">
+                            <form.Field
+                              name="worker.name"
+                              children={(subField) => (
+                                <div className="space-y-2">
+                                  <Label>Worker Name</Label>
+                                  <Input
+                                    value={subField.state.value}
+                                    onChange={(e) => subField.handleChange(e.target.value)}
+                                    placeholder="language-translation"
+                                  />
+                                </div>
+                              )}
+                            />
+                            <form.Field
+                              name="worker.workerType"
+                              children={(subField) => (
+                                <div className="space-y-2">
+                                  <Label>Worker Type</Label>
+                                  <Input
+                                    value={subField.state.value}
+                                    onChange={(e) => subField.handleChange(e.target.value)}
+                                    placeholder="languageTranslation"
+                                  />
+                                </div>
+                              )}
+                            />
+                            <form.Field
+                              name="worker.secrets"
+                              children={(subField) => (
+                                <div className="space-y-2 col-span-2">
+                                  <Label>Secrets (comma separated)</Label>
+                                  <Input
+                                    value={subField.state.value}
+                                    onChange={(e) => subField.handleChange(e.target.value)}
+                                    placeholder="vertex_ai, bq"
+                                  />
+                                  <p className="text-xs text-muted-foreground">
+                                    Supported: vertex_ai, bq
+                                  </p>
+                                </div>
+                              )}
+                            />
+                            <form.Field
+                              name="worker.additionalEnv"
+                              children={(subField) => (
+                                <div className="space-y-2 col-span-2">
+                                  <Label>Additional Environment Variables</Label>
+                                  <Textarea
+                                    value={subField.state.value}
+                                    onChange={(e) => subField.handleChange(e.target.value)}
+                                    placeholder="BATCH_SIZE=100"
+                                    className="font-mono min-h-[100px]"
+                                  />
+                                  <p className="text-xs text-muted-foreground">
+                                    Format: KEY=VALUE (one per line)
+                                  </p>
+                                </div>
+                              )}
+                            />
+                          </div>
+                        </Card>
+                      )}
+                    </>
+                  )}
+                />
+              </div>
+            </div>
+
             <form.Field
               name="domainName"
               children={(field) => (
@@ -543,6 +820,8 @@ export function GitOpsPage() {
                 )}
               />
             </div>
+
+
 
             {/* Form Level Errors */}
             <form.Subscribe

@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     GIT_USER_NAME: str = Field("DevOps Automation", description="Git author name for commits")
     GIT_USER_EMAIL: str = Field("devops@automation.local", description="Git author email for commits")
     GITHUB_TOKEN: str = Field("GITHUB_TOKEN", description="GitHub secret token")
+    GITOPS_REPO_URL: Optional[str] = Field(None, description="GitOps repository URL for fetching values")
 
     # Preview Session Configuration
     PREVIEW_SESSION_TTL_MINUTES: int = Field(60, description="Preview session time-to-live in minutes")

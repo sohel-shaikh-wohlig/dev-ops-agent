@@ -164,3 +164,4 @@ class ChangeType(str, Enum):
     """Type of configuration change"""
     ADD = "ADD"
     UPDATE = "UPDATE"
+    UNCHANGED = "UNCHANGED"

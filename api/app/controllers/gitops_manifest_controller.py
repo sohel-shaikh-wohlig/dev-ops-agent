@@ -99,17 +99,32 @@ class GitOpsManifestController:
             # Get environment value as string
             env_value = request.environment.value if hasattr(request.environment, 'value') else str(request.environment)
 
-            # Convert cronjob model to dict if provided
-            cronjob_dict = None
-            if request.cronjob:
-                cronjob_dict = request.cronjob.model_dump()
-                logger.info(f"CronJob configuration provided:")
-                logger.info(f"  - Name: {cronjob_dict.get('name')}")
-                logger.info(f"  - Schedule: {cronjob_dict.get('schedule')}")
-                logger.info(f"  - Suspend: {cronjob_dict.get('suspend')}")
-                logger.info(f"  - Command: {cronjob_dict.get('cmd')}")
+            # Convert cronjobs models to list of dicts if provided
+            cronjobs_list = None
+            if request.cronjobs and len(request.cronjobs) > 0:
+                cronjobs_list = [cj.model_dump() for cj in request.cronjobs]
+                logger.info(f"CronJobs configuration provided: {len(cronjobs_list)} cronjob(s)")
+                for idx, cj in enumerate(cronjobs_list):
+                    logger.info(f"  CronJob [{idx}]:")
+                    logger.info(f"    - Name: {cj.get('name')}")
+                    logger.info(f"    - Schedule: {cj.get('schedule')}")
+                    logger.info(f"    - Suspend: {cj.get('suspend')}")
+                    logger.info(f"    - Command: {cj.get('cmd')}")
             else:
-                logger.info("No CronJob configuration provided - skipping cronjob setup")
+                logger.info("No CronJobs configuration provided - skipping cronjobs setup")
+
+            # Convert worker model to dict if provided
+            worker_dict = None
+            if request.worker:
+                worker_dict = request.worker.model_dump()
+                logger.info(f"Worker configuration provided:")
+                logger.info(f"  - Name: {worker_dict.get('name')}")
+                logger.info(f"  - Worker Type: {worker_dict.get('worker_type')}")
+                logger.info(f"  - Vertex AI Secret: {worker_dict.get('vertex_ai_secret')}")
+                logger.info(f"  - BigQuery Secret: {worker_dict.get('bigquery_secret')}")
+                logger.info(f"  - Additional Env: {worker_dict.get('additional_env')}")
+            else:
+                logger.info("No Worker configuration provided - skipping worker setup")
 
             # Process templates with env_content (same format as ConfigMap)
             result = self.template_service.process_template(
@@ -124,7 +139,8 @@ class GitOpsManifestController:
                 argocd_app_name=request.argocd_app_name,
                 gitops_repo_url=request.gitops_repo_url,
                 env_content=request.env_content,
-                cronjob=cronjob_dict
+                cronjobs=cronjobs_list,
+                worker=worker_dict
             )
 
             # Build response
@@ -494,7 +510,8 @@ class GitOpsManifestController:
                 total_files_processed=result['total_files_processed'],
                 template_variables=result['template_variables'],
                 environment_variables=result.get('environment_variables', {}),
-                cronjob=result.get('cronjob')
+                cronjobs=result.get('cronjobs'),
+                worker=result.get('worker')
             )
 
             logger.info(f"=== Manifest Generation Complete ===")
