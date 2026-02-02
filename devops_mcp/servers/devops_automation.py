@@ -19,9 +19,9 @@ from mcp.types import Tool, TextContent
 import mcp.server.stdio
 
 # Import shared utilities
-from mcp.shared.api_client import FastAPIClient
-from mcp.config.settings import settings
-from mcp.tools.deployment_tools import get_deployment_tools
+from devops_mcp.shared.api_client import FastAPIClient
+from devops_mcp.config.settings import settings
+from devops_mcp.tools.deployment_tools import get_deployment_tools
 
 # Initialize MCP server
 app = Server("devops-automation")

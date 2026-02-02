@@ -17,7 +17,7 @@ MCP servers can run in two modes:
 cd /path/to/your-project
 
 # Run the MCP server directly
-python mcp/servers/devops_automation.py
+python devops_mcp/servers/devops_automation.py
 ```
 
 **What happens:**
@@ -40,7 +40,7 @@ npm install -g @modelcontextprotocol/inspector
 
 ```bash
 # Start inspector
-mcp-inspector python mcp/servers/devops_automation.py
+mcp-inspector python devops_mcp/servers/devops_automation.py
 ```
 
 **Step 3: Open in browser**
@@ -86,7 +86,7 @@ This is the main way to use MCP servers - they run automatically when Claude Des
   "mcpServers": {
     "devops-automation": {
       "command": "python",
-      "args": ["/absolute/path/to/your-project/mcp/servers/devops_automation.py"],
+      "args": ["/absolute/path/to/your-project/devops_mcp/servers/devops_automation.py"],
       "env": {
         "MCP_FASTAPI_URL": "http://localhost:8000",
         "MCP_LOG_LEVEL": "INFO"
@@ -94,7 +94,7 @@ This is the main way to use MCP servers - they run automatically when Claude Des
     },
     "kubernetes": {
       "command": "python",
-      "args": ["/absolute/path/to/your-project/mcp/servers/kubernetes_multi.py"]
+      "args": ["/absolute/path/to/your-project/devops_mcp/servers/kubernetes_multi.py"]
     }
   }
 }
@@ -109,7 +109,7 @@ pwd
 # Copy this path and use it in config
 
 # Example on macOS:
-# /Users/yourname/projects/devops-automation/mcp/servers/devops_automation.py
+# /Users/yourname/projects/devops-automation/devops_mcp/servers/devops_automation.py
 ```
 
 ### Step 2: Make sure your FastAPI is running
@@ -187,7 +187,7 @@ EOF
 pip install python-dotenv
 
 # Then run normally - settings will load from .env
-python mcp/servers/devops_automation.py
+python devops_mcp/servers/devops_automation.py
 ```
 
 ### Using command line
@@ -197,7 +197,7 @@ python mcp/servers/devops_automation.py
 MCP_FASTAPI_URL=http://localhost:8000 \
 MCP_API_TOKEN=abc123 \
 MCP_LOG_LEVEL=DEBUG \
-python mcp/servers/devops_automation.py
+python devops_mcp/servers/devops_automation.py
 ```
 
 ### Using shell profile
@@ -211,7 +211,7 @@ export MCP_API_TOKEN="your_token"
 source ~/.bashrc  # or source ~/.zshrc
 
 # Now run normally
-python mcp/servers/devops_automation.py
+python devops_mcp/servers/devops_automation.py
 ```
 
 ---
@@ -236,7 +236,7 @@ User=youruser
 WorkingDirectory=/path/to/your-project
 Environment="MCP_FASTAPI_URL=http://localhost:8000"
 Environment="MCP_API_TOKEN=your_token"
-ExecStart=/usr/bin/python3 /path/to/your-project/mcp/servers/devops_automation.py
+ExecStart=/usr/bin/python3 /path/to/your-project/devops_mcp/servers/devops_automation.py
 Restart=always
 
 [Install]
@@ -268,14 +268,14 @@ COPY requirements-mcp.txt .
 RUN pip install --no-cache-dir -r requirements-mcp.txt
 
 # Copy MCP code
-COPY mcp/ ./mcp/
+COPY devops_mcp/ ./devops_mcp/
 
 # Set environment variables
 ENV MCP_FASTAPI_URL=http://host.docker.internal:8000
 ENV MCP_LOG_LEVEL=INFO
 
 # Run server
-CMD ["python", "mcp/servers/devops_automation.py"]
+CMD ["python", "devops_mcp/servers/devops_automation.py"]
 ```
 
 ```bash
@@ -351,10 +351,10 @@ cat ~/Library/Application\ Support/Claude/claude_desktop_config.json | jq .
     "devops-automation": {
       "command": "python",
       // ✓ Absolute path
-      "args": ["/Users/you/project/mcp/servers/devops_automation.py"],
+      "args": ["/Users/you/project/devops_mcp/servers/devops_automation.py"],
       
       // ✗ Relative path - won't work!
-      // "args": ["mcp/servers/devops_automation.py"]
+      // "args": ["devops_mcp/servers/devops_automation.py"]
     }
   }
 }
@@ -381,7 +381,7 @@ tail -f ~/Library/Logs/Claude/mcp*.log
 
 **Check 1: Run manually to see error**
 ```bash
-python mcp/servers/devops_automation.py
+python devops_mcp/servers/devops_automation.py
 # You should see the actual error
 ```
 
@@ -390,8 +390,8 @@ python mcp/servers/devops_automation.py
 # Test if all imports work
 python -c "
 from mcp.server import Server
-from mcp.shared.api_client import FastAPIClient
-from mcp.config.settings import settings
+from devops_mcp.shared.api_client import FastAPIClient
+from devops_mcp.config.settings import settings
 print('All imports OK')
 "
 ```
@@ -399,10 +399,10 @@ print('All imports OK')
 **Check 3: Check permissions**
 ```bash
 # Ensure file is executable
-chmod +x mcp/servers/devops_automation.py
+chmod +x devops_mcp/servers/devops_automation.py
 
 # Check file ownership
-ls -la mcp/servers/devops_automation.py
+ls -la devops_mcp/servers/devops_automation.py
 ```
 
 ### Problem: "Tools not appearing in Claude"
@@ -420,7 +420,7 @@ tail -f ~/Library/Logs/Claude/mcp*.log | grep devops-automation
 **Check 2: Test tools manually**
 ```bash
 # Use MCP inspector
-mcp-inspector python mcp/servers/devops_automation.py
+mcp-inspector python devops_mcp/servers/devops_automation.py
 
 # Verify tools are listed
 ```
@@ -439,7 +439,7 @@ uvicorn api.main:app --reload
 
 **Terminal 2: Run MCP Server with Inspector**
 ```bash
-mcp-inspector python mcp/servers/devops_automation.py
+mcp-inspector python devops_mcp/servers/devops_automation.py
 ```
 
 **Browser: Test tools**
@@ -460,7 +460,7 @@ tail -f logs/mcp/devops_automation.log
 pkill -f "devops_automation.py"
 
 # Restart
-python mcp/servers/devops_automation.py
+python devops_mcp/servers/devops_automation.py
 ```
 
 Or use a watch script:
@@ -469,7 +469,7 @@ Or use a watch script:
 # watch_mcp.sh
 #!/bin/bash
 while true; do
-    python mcp/servers/devops_automation.py
+    python devops_mcp/servers/devops_automation.py
     echo "Server crashed. Restarting in 2 seconds..."
     sleep 2
 done
@@ -495,10 +495,10 @@ done
 
 ```bash
 # Test MCP server directly
-python mcp/servers/devops_automation.py
+python devops_mcp/servers/devops_automation.py
 
 # Test with inspector (best for dev)
-mcp-inspector python mcp/servers/devops_automation.py
+mcp-inspector python devops_mcp/servers/devops_automation.py
 
 # Check if server is working
 python -c "from mcp.servers.devops_automation import app; print('OK')"
@@ -512,7 +512,7 @@ curl http://localhost:8000/docs
 # Full restart (development)
 pkill -f "devops_automation.py"
 uvicorn api.main:app --reload &
-python mcp/servers/devops_automation.py
+python devops_mcp/servers/devops_automation.py
 ```
 
 ---
@@ -525,7 +525,7 @@ python mcp/servers/devops_automation.py
 uvicorn api.main:app --reload
 
 # 2. Test MCP with inspector
-mcp-inspector python mcp/servers/devops_automation.py
+mcp-inspector python devops_mcp/servers/devops_automation.py
 
 # 3. Iterate and test
 ```

@@ -65,7 +65,7 @@ def get_deployment_tools() -> list[Tool]:
                     },
                     "gitops_repo_url": {
                         "type": "string",
-                        "description": "GitOps repository URL for Kubernetes manifests"
+                        "description": "GitOps repository URL for Kubernetes manifests (e.g., https://github.com/allvest-wm/git-ops.git)"
                     },
                     "git_repo_name": {
                         "type": "string",

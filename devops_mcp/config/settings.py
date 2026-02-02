@@ -1,4 +1,4 @@
-# mcp/config/settings.py
+# devops_mcp/config/settings.py
 
 """
 MCP Settings

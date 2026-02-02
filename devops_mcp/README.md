@@ -39,28 +39,28 @@
 
 
 ### Import Relationships
-mcp/servers/devops_automation.py
+devops_devops_mcp/servers/devops_automation.py
     ├── imports: mcp.shared.api_client
     ├── imports: mcp.config.settings
     ├── imports: mcp.tools.deployment_tools
     └── calls: FastAPI endpoints via api_client
 
-mcp/servers/kubernetes_multi.py
+devops_devops_mcp/servers/kubernetes_multi.py
     ├── imports: mcp.config.settings
     ├── imports: mcp.config.contexts
     └── calls: kubectl commands
 
-mcp/shared/api_client.py
+devops_mcp/shared/api_client.py
     ├── imports: httpx
     ├── imports: logging
     └── called by: all MCP servers
 
-mcp/config/settings.py
+devops_mcp/config/settings.py
     ├── imports: pydantic_settings
     ├── reads: .env file
     └── used by: all MCP components
 
-mcp/tools/deployment_tools.py
+devops_mcp/tools/deployment_tools.py
     ├── imports: mcp.types
     └── provides: Tool schemas
 
@@ -68,9 +68,9 @@ mcp/tools/deployment_tools.py
 ### Configuration Flow
 .env (environment variables)
     ↓
-mcp/config/settings.py (loads and validates)
+devops_mcp/config/settings.py (loads and validates)
     ↓
-mcp/servers/* (use settings)
+devops_devops_mcp/servers/* (use settings)
     ↓
 Claude Desktop config.json (references servers)
     ↓
@@ -89,7 +89,7 @@ AI Client (runs servers with settings)
          ▼                          ▼                          ▼
 ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
 │ $ python             │  │ $ mcp-inspector      │  │ claude_desktop_      │
-│   mcp/servers/       │  │   python mcp/        │  │   config.json        │
+│   devops_mcp/servers/       │  │   python devops_mcp/        │  │   config.json        │
 │   devops.py          │  │   servers/devops.py  │  │                      │
 │                      │  │                      │  │ {                    │
 │ [Waiting for stdin]  │  │ ✓ Web UI opens       │  │   "mcpServers": {    │
@@ -106,7 +106,7 @@ AI Client (runs servers with settings)
 ┌─────────────────────────────────────────────────────────────┐
 │ Terminal                                                    │
 ├─────────────────────────────────────────────────────────────┤
-│ $ python mcp/servers/devops_automation.py                   │
+│ $ python devops_devops_mcp/servers/devops_automation.py                   │
 │ ▊                                                           │
 │ [Server is running, waiting for MCP protocol input]         │
 │ [No visible output is normal]                               │
@@ -129,7 +129,7 @@ When to use:
 ┌─────────────────────────────────────────────────────────────┐
 │ Terminal                                                     │
 ├─────────────────────────────────────────────────────────────┤
-│ $ mcp-inspector python mcp/servers/devops_automation.py     │
+│ $ mcp-inspector python devops_devops_mcp/servers/devops_automation.py     │
 │                                                             │
 │ ✓ MCP Inspector running at http://localhost:5173           │
 │ ✓ Server connected: devops-automation                      │
@@ -180,7 +180,7 @@ Step 1: Configure
   "mcpServers": {
     "devops-automation": {
       "command": "python",
-      "args": ["/Users/you/project/mcp/servers/devops_automation.py"],
+      "args": ["/Users/you/project/devops_devops_mcp/servers/devops_automation.py"],
       "env": {
         "MCP_FASTAPI_URL": "http://localhost:8000"
       }
