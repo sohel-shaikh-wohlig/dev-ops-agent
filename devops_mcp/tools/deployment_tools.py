@@ -44,7 +44,7 @@ def get_deployment_tools() -> list[Tool]:
                 "properties": {
                     "environment": {
                         "type": "string",
-                        "enum": ["development", "staging", "production", "qa", "uat"],
+                        "enum": ["dev", "staging", "production", "qa", "uat"],
                         "description": "Target deployment environment"
                     },
                     "microservice_name": {
@@ -92,17 +92,21 @@ def get_deployment_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Environment variables in .env format (KEY=VALUE pairs, one per line)"
                     },
-                    "cronjob": {
-                        "type": "object",
-                        "description": "Optional CronJob configuration",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "schedule": {"type": "string"},
-                            "suspend": {"type": "boolean"},
-                            "cmd": {
-                                "type": "array",
-                                "items": {"type": "string"}
-                            }
+                    "cronjobs": {
+                        "type": "array",
+                        "description": "Optional list of CronJob configurations",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "schedule": {"type": "string"},
+                                "suspend": {"type": "boolean"},
+                                "cmd": {
+                                    "type": "array",
+                                    "items": {"type": "string"}
+                                }
+                            },
+                            "required": ["name"]
                         }
                     }
                 },
@@ -122,25 +126,20 @@ def get_deployment_tools() -> list[Tool]:
         Tool(
             name="check_deployment_status",
             description="""
-            Check the real-time status of an ongoing or completed deployment.
-            Returns current step, progress, and any errors.
-            
-            This is useful for monitoring deployments initiated by deploy_microservice.
+            Check the status of an ArgoCD application.
+            Returns sync status, health status, and resource details.
+
+            Use this to monitor applications deployed via ArgoCD.
             """,
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "microservice_name": {
+                    "argocd_app_name": {
                         "type": "string",
-                        "description": "Name of the microservice to check"
-                    },
-                    "environment": {
-                        "type": "string",
-                        "enum": ["development", "staging", "production", "qa", "uat"],
-                        "description": "Environment to check"
+                        "description": "ArgoCD application name (e.g., user-service-dev)"
                     }
                 },
-                "required": ["microservice_name", "environment"]
+                "required": ["argocd_app_name"]
             }
         ),
         
@@ -161,7 +160,7 @@ def get_deployment_tools() -> list[Tool]:
                     },
                     "environment": {
                         "type": "string",
-                        "enum": ["development", "staging", "production", "qa", "uat"],
+                        "enum": ["dev", "staging", "production", "qa", "uat"],
                         "description": "Target environment"
                     },
                     "microservice_url": {
@@ -180,23 +179,29 @@ def get_deployment_tools() -> list[Tool]:
         Tool(
             name="list_recent_deployments",
             description="""
-            List recent deployments across all environments.
-            Shows deployment history, status, and timestamps.
+            List ArgoCD applications with optional filters.
+            Shows application names, sync status, and health status.
             """,
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "limit": {
-                        "type": "integer",
-                        "description": "Number of recent deployments to return",
-                        "default": 10,
-                        "minimum": 1,
-                        "maximum": 100
-                    },
-                    "environment": {
+                    "project": {
                         "type": "string",
-                        "description": "Filter by environment (optional)",
-                        "enum": ["development", "staging", "production", "qa", "uat"]
+                        "description": "Filter by ArgoCD project name (optional)"
+                    },
+                    "repo": {
+                        "type": "string",
+                        "description": "Filter by source repository URL (optional)"
+                    },
+                    "sync_status": {
+                        "type": "string",
+                        "description": "Filter by sync status (optional)",
+                        "enum": ["Synced", "OutOfSync", "Unknown"]
+                    },
+                    "health_status": {
+                        "type": "string",
+                        "description": "Filter by health status (optional)",
+                        "enum": ["Healthy", "Degraded", "Progressing", "Suspended", "Missing", "Unknown"]
                     }
                 }
             }
@@ -205,29 +210,26 @@ def get_deployment_tools() -> list[Tool]:
         Tool(
             name="rollback_deployment",
             description="""
-            Rollback a deployment to the previous version.
-            
-            This will:
-            1. Revert GitOps repository to previous commit
-            2. Trigger ArgoCD sync
-            3. Monitor rollback completion
-            
+            Rollback an ArgoCD application to a specific revision.
+
+            This will trigger ArgoCD to sync the application to the specified
+            revision and monitor rollback completion.
+
             IMPORTANT: This is a write operation that modifies production systems.
             """,
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "microservice_name": {
+                    "argocd_app_name": {
                         "type": "string",
-                        "description": "Name of the microservice to rollback"
+                        "description": "ArgoCD application name (e.g., user-service-dev)"
                     },
-                    "environment": {
+                    "revision": {
                         "type": "string",
-                        "enum": ["development", "staging", "production", "qa", "uat"],
-                        "description": "Environment to rollback"
+                        "description": "Target revision to rollback to (commit SHA or tag)"
                     }
                 },
-                "required": ["microservice_name", "environment"]
+                "required": ["argocd_app_name", "revision"]
             }
         )
     ]

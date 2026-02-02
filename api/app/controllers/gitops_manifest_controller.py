@@ -178,24 +178,26 @@ class GitOpsManifestController:
             if not is_valid:
                 raise Exception(f"Invalid microservice structure: {error_msg}")
 
-            # Step 4: Parse environment variables
-            logger.info("Step 4: Parsing environment variables...")
-            if not request.env_content:
-                raise Exception("No .env content provided in request")
+            # Step 4: Parse environment variables (optional)
+            env_vars = {}
+            if request.env_content:
+                logger.info("Step 4: Parsing environment variables...")
+                env_vars = config_service.parse_env_content(request.env_content)
 
-            env_vars = config_service.parse_env_content(request.env_content)
+                if not env_vars:
+                    raise Exception("No valid environment variables found in .env content")
 
-            if not env_vars:
-                raise Exception("No valid environment variables found in .env content")
+                logger.info(f"Parsed {len(env_vars)} environment variables")
 
-            logger.info(f"Parsed {len(env_vars)} environment variables")
+                # Step 5: Apply configuration changes
+                logger.info("Step 5: Applying configuration changes...")
+                changes = config_service.apply_changes(env_vars)
 
-            # Step 5: Apply configuration changes
-            logger.info("Step 5: Applying configuration changes...")
-            changes = config_service.apply_changes(env_vars)
-
-            if not changes:
-                logger.info("No changes detected - all values already up to date")
+                if not changes:
+                    logger.info("No changes detected - all values already up to date")
+            else:
+                logger.info("Step 4: No env_content provided, skipping environment variable parsing")
+                logger.info("Step 5: Skipping configuration changes (no env vars)")
 
             # Step 6: Clone GitOps repository
             logger.info("Step 6: Cloning GitOps repository...")

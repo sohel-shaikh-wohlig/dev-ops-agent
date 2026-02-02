@@ -80,20 +80,25 @@ async def deploy_microservice(arguments: dict) -> list[TextContent]:
     This calls your existing /gitops/micro-service endpoint and
     processes the streaming response.
     """
-    # Convert to FastAPI format (camelCase)
+    # Build payload using snake_case field names (Pydantic v2 with populate_by_name)
     payload = {
         "environment": arguments["environment"],
-        "microserviceName": arguments["microservice_name"],
-        "microserviceUrl": arguments["microservice_url"],
-        "containerPort": arguments["container_port"],
-        "gitOpsRepoUrl": arguments["gitops_repo_url"],
-        "gitRepoName": arguments["git_repo_name"],
-        "gitBranch": arguments.get("git_branch", "main"),
-        "argoCdAppName": arguments["argocd_app_name"],
-        "domainName": arguments["domain_name"],
-        "envContent": arguments.get("env_content"),
-        "cronjob": arguments.get("cronjob")
+        "microservice_name": arguments["microservice_name"],
+        "microservice_url": arguments["microservice_url"],
+        "container_port": arguments["container_port"],
+        "gitops_repo_url": arguments["gitops_repo_url"],
+        "git_repo_name": arguments["git_repo_name"],
+        "git_branch": arguments.get("git_branch", "main"),
+        "argocd_app_name": arguments["argocd_app_name"],
+        "domain_name": arguments["domain_name"],
     }
+    # Only include optional fields when provided
+    if arguments.get("env_content"):
+        payload["env_content"] = arguments["env_content"]
+    if arguments.get("cronjobs"):
+        payload["cronjobs"] = arguments["cronjobs"]
+    if arguments.get("worker"):
+        payload["worker"] = arguments["worker"]
     
     try:
         # Stream the deployment
@@ -101,7 +106,7 @@ async def deploy_microservice(arguments: dict) -> list[TextContent]:
         result_data = None
         error_message = None
         
-        async for event in api_client.stream_post("/gitops/micro-service", payload):
+        async for event in api_client.stream_post("/api/gitops/micro-service", payload):
             event_type = event.get("type")
             
             if event_type == "log":
@@ -158,29 +163,33 @@ async def deploy_microservice(arguments: dict) -> list[TextContent]:
 
 
 async def check_deployment_status(arguments: dict) -> list[TextContent]:
-    """Check status of a deployment"""
-    microservice = arguments["microservice_name"]
-    environment = arguments["environment"]
-    
+    """Check status of an ArgoCD application"""
+    app_name = arguments["argocd_app_name"]
+
     try:
-        data = await api_client.get(
-            f"/gitops/deployments/{microservice}/{environment}"
+        response = await api_client.get(
+            f"/api/argocd/applications/{app_name}/status"
         )
-        
+
+        # Response is BaseResponse wrapper — extract .data
+        data = response.get("data", {})
+
         # Format status response
-        status_text = f"**Deployment Status: {microservice}**\n\n"
-        status_text += f"Environment: {environment}\n"
-        status_text += f"Status: {data.get('status', 'unknown')}\n"
-        status_text += f"Last Updated: {data.get('last_updated', 'N/A')}\n"
-        
-        if data.get('current_step'):
-            status_text += f"\nCurrent Step: {data['current_step']}\n"
-        
-        if data.get('argocd_sync_status'):
-            status_text += f"ArgoCD Sync: {data['argocd_sync_status']}\n"
-        
+        status_text = f"**Application Status: {data.get('name', app_name)}**\n\n"
+        status_text += f"Sync Status: {data.get('sync', 'unknown')}\n"
+        status_text += f"Health Status: {data.get('health', 'unknown')}\n"
+
+        resources = data.get('resources', [])
+        if resources:
+            status_text += f"\n**Resources ({len(resources)}):**\n"
+            for res in resources:
+                kind = res.get('kind', 'Unknown')
+                name = res.get('name', 'unknown')
+                health = res.get('health', 'N/A')
+                status_text += f"  - {kind}/{name}: {health}\n"
+
         return [TextContent(type="text", text=status_text)]
-    
+
     except Exception as e:
         return [TextContent(
             type="text",
@@ -235,62 +244,80 @@ GitOps Repo: {arguments['gitops_repo_url']}
 
 
 async def list_recent_deployments(arguments: dict) -> list[TextContent]:
-    """List recent deployments"""
+    """List ArgoCD applications"""
     try:
-        limit = arguments.get("limit", 10)
-        environment = arguments.get("environment")
-        
-        params = {"limit": limit}
-        if environment:
-            params["environment"] = environment
-        
-        deployments = await api_client.get("/gitops/deployments", params=params)
-        
-        if not deployments:
-            return [TextContent(type="text", text="No recent deployments found.")]
-        
-        # Format list
-        result = "**Recent Deployments:**\n\n"
-        for dep in deployments:
-            result += f"• **{dep['microservice_name']}** ({dep['environment']})\n"
-            result += f"  Status: {dep['status']}\n"
-            result += f"  Deployed: {dep['created_at']}\n"
-            result += f"  URL: {dep.get('domain_name', 'N/A')}\n\n"
-        
+        params = {}
+        if arguments.get("project"):
+            params["project"] = arguments["project"]
+        if arguments.get("repo"):
+            params["repo"] = arguments["repo"]
+        if arguments.get("sync_status"):
+            params["sync_status"] = arguments["sync_status"]
+        if arguments.get("health_status"):
+            params["health_status"] = arguments["health_status"]
+
+        # Response is ApplicationListResponse directly (not BaseResponse wrapped)
+        data = await api_client.get("/api/argocd/applications", params=params)
+
+        items = data.get("items", [])
+        total = data.get("total", len(items))
+
+        if not items:
+            return [TextContent(type="text", text="No ArgoCD applications found.")]
+
+        result = f"**ArgoCD Applications ({total} total):**\n\n"
+        for app in items:
+            name = app.get("name", "unknown")
+            sync = app.get("sync", "N/A")
+            health = app.get("health", "N/A")
+            project = app.get("project", "N/A")
+            result += f"- **{name}** (project: {project})\n"
+            result += f"  Sync: {sync} | Health: {health}\n"
+
         return [TextContent(type="text", text=result)]
-    
+
     except Exception as e:
         return [TextContent(type="text", text=f"Error: {str(e)}")]
 
 
 async def rollback_deployment(arguments: dict) -> list[TextContent]:
-    """Rollback a deployment"""
-    microservice = arguments["microservice_name"]
-    environment = arguments["environment"]
-    
+    """Rollback an ArgoCD application to a specific revision"""
+    app_name = arguments["argocd_app_name"]
+    revision = arguments["revision"]
+
     try:
         result = await api_client.post(
-            f"/gitops/deployments/{microservice}/{environment}/rollback",
-            data={}
+            f"/api/argocd/applications/{app_name}/rollback",
+            data={"revision": revision}
         )
-        
-        response_text = f"✅ Rollback initiated for {microservice} in {environment}\n\n"
-        response_text += f"Previous version: {result.get('previous_version', 'unknown')}\n"
-        response_text += f"Current version: {result.get('current_version', 'unknown')}\n"
-        
+
+        # Response is BaseResponse wrapper
+        status = result.get("status", "unknown")
+        message = result.get("message", "")
+        data = result.get("data", {})
+
+        response_text = f"Rollback for {app_name}\n\n"
+        response_text += f"Status: {status}\n"
+        response_text += f"Message: {message}\n"
+        if data:
+            response_text += f"Details: {data}\n"
+
         return [TextContent(type="text", text=response_text)]
-    
+
     except Exception as e:
         return [TextContent(type="text", text=f"Error: {str(e)}")]
 
 
 async def main():
     """Run the MCP server"""
+    import logging
+    logger = logging.getLogger(__name__)
+
     # Check FastAPI connection
     if not await api_client.health_check():
-        print(f"Warning: Cannot connect to FastAPI at {settings.FASTAPI_URL}")
-        print("Server will start but may not function correctly.")
-    
+        logger.warning(f"Cannot connect to FastAPI at {settings.FASTAPI_URL}")
+        logger.warning("Server will start but may not function correctly.")
+
     # Run server
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await app.run(
