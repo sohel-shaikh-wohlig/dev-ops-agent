@@ -23,6 +23,27 @@ from devops_mcp.shared.api_client import FastAPIClient
 from devops_mcp.config.settings import settings
 from devops_mcp.tools.deployment_tools import get_deployment_tools
 
+# Map FastAPI log levels to MCP LoggingLevel
+_LEVEL_MAP = {
+    "DEBUG": "debug",
+    "INFO": "info",
+    "WARNING": "warning",
+    "ERROR": "error",
+    "CRITICAL": "critical",
+}
+
+
+async def _send_log(message: str, level: str = "INFO") -> None:
+    """Send a real-time log notification to the MCP client."""
+    try:
+        mcp_level = _LEVEL_MAP.get(level.upper(), "info")
+        await app.request_context.session.send_log_message(
+            level=mcp_level, data=message, logger="devops-automation"
+        )
+    except Exception:
+        pass  # Don't let notification failures break the tool
+
+
 # Initialize MCP server
 app = Server("devops-automation")
 
@@ -111,18 +132,17 @@ async def deploy_microservice(arguments: dict) -> list[TextContent]:
         
         async for event in api_client.stream_post("/api/gitops/micro-service", payload):
             event_type = event.get("type")
-            
+
             if event_type == "log":
-                # Collect log messages
                 log_msg = event.get("message", "")
+                log_level = event.get("level", "INFO")
                 logs.append(log_msg)
-            
+                await _send_log(log_msg, log_level)
+
             elif event_type == "result":
-                # Final result
                 result_data = event.get("data")
-            
+
             elif event_type == "error":
-                # Error occurred
                 error_message = event.get("message")
         
         # Format response
@@ -336,7 +356,10 @@ async def cleanup_deployment(arguments: dict) -> list[TextContent]:
             event_type = event.get("type")
 
             if event_type == "log":
-                logs.append(event.get("message", ""))
+                log_msg = event.get("message", "")
+                log_level = event.get("level", "INFO")
+                logs.append(log_msg)
+                await _send_log(log_msg, log_level)
             elif event_type == "result":
                 result_data = event.get("data")
             elif event_type == "error":

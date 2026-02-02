@@ -108,7 +108,6 @@ class CleanupService:
                                 logger.warning(warning)
                                 results["warnings"].append(warning)
                                 continue
-                            
                             await cloudflare_service.delete_dns_record(
                                 zone_id=settings.CLOUDFLARE_ZONE_ID,
                                 record_id=record["id"]
@@ -158,7 +157,7 @@ class CleanupService:
                     
                     # Safety check: verify namespace matches expected value
                     namespace = app_status.get("spec", {}).get("destination", {}).get("namespace")
-                    if not force and namespace != request.argocd_app_name:
+                    if not force and namespace != request.environment:
                         warning = (f"Skipping ArgoCD app deletion - namespace mismatch "
                                   f"(expected: {request.argocd_app_name}, found: {namespace})")
                         logger.warning(warning)
