@@ -208,6 +208,76 @@ def get_deployment_tools() -> list[Tool]:
         ),
         
         Tool(
+            name="cleanup_deployment",
+            description="""
+            Cleanup all resources created by a deploy_microservice operation.
+
+            This will remove:
+            - Cloudflare DNS records
+            - ArgoCD applications
+            - GitOps repository manifests
+            - Microservice repository workflows
+            - GitHub secrets (only if explicitly named)
+
+            IMPORTANT: This is a destructive write operation.
+            For production or force cleanup, an audit_comment is required.
+            """,
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "microservice_name": {
+                        "type": "string",
+                        "description": "Name of the microservice to cleanup"
+                    },
+                    "environment": {
+                        "type": "string",
+                        "enum": ["dev", "staging", "production", "qa", "uat"],
+                        "description": "Target environment"
+                    },
+                    "domain_name": {
+                        "type": "string",
+                        "description": "Full domain name (e.g., app.dev.example.com)"
+                    },
+                    "argocd_app_name": {
+                        "type": "string",
+                        "description": "ArgoCD application name (e.g., user-service-dev)"
+                    },
+                    "gitops_repo_url": {
+                        "type": "string",
+                        "description": "GitOps repository URL"
+                    },
+                    "microservice_repo_url": {
+                        "type": "string",
+                        "description": "Microservice repository URL"
+                    },
+                    "github_secret_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Explicit list of GitHub secret names to delete (optional, opt-in only)"
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "Skip safety validations (requires audit_comment)",
+                        "default": False
+                    },
+                    "audit_comment": {
+                        "type": "string",
+                        "description": "Reason for cleanup (required for production or force cleanup)",
+                        "maxLength": 500
+                    }
+                },
+                "required": [
+                    "microservice_name",
+                    "environment",
+                    "domain_name",
+                    "argocd_app_name",
+                    "gitops_repo_url",
+                    "microservice_repo_url"
+                ]
+            }
+        ),
+
+        Tool(
             name="rollback_deployment",
             description="""
             Rollback an ArgoCD application to a specific revision.

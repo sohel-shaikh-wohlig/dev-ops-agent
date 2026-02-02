@@ -7,7 +7,8 @@ import shutil
 import asyncio
 import httpx
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
+from app.services.cleanup_service import CleanupService
 from app.models.gitops import (
     GitOpsManifestRequest,
     GitOpsManifestResponse,
@@ -35,6 +36,7 @@ class GitOpsManifestController:
     def __init__(self):
         """Initialize controller with new template service instance per request"""
         self.template_service = GitOpsTemplateService()
+        self.cleanup_service = CleanupService()
         logger.info("GitOpsManifestController initialized")
 
     def _find_microservice_path(
@@ -376,14 +378,31 @@ class GitOpsManifestController:
             dns_record_data = DNSRecordCreate(
                 type="A",
                 name=request.argocd_app_name,
-                content="34.180.18.42" #TODO Change value for DEV & STAGE
+                content=settings.LOAD_BALANCER_IP
             )
 
-            dns_result = await cloudflare_service.create_dns_record(
+            # Check if a matching record already exists
+            filters = {
+                "name": f"{request.domain_name}",  # Fully qualified name
+                "type": "A",
+                "content": settings.LOAD_BALANCER_IP
+            }
+            # Note: Cloudflare's API expects the full domain name (e.g., app.example.com), not just "app"
+            # So ensure `request.argocd_app_name` is just the subdomain, and you append the zone domain.
+
+            existing_records = await cloudflare_service.list_dns_records(
                 zone_id=settings.CLOUDFLARE_ZONE_ID,
-                record_data=dns_record_data
+                filters=filters
             )
-            logger.info(f"Cloudflare DNS record created successfully: {request.argocd_app_name}")
+
+            if existing_records["records"]:
+                logger.info(f"DNS record already exists for {request.argocd_app_name}. Skipping creation.")
+            else:
+                dns_result = await cloudflare_service.create_dns_record(
+                    zone_id=settings.CLOUDFLARE_ZONE_ID,
+                    record_data=dns_record_data
+                )
+                logger.info(f"Cloudflare DNS record created successfully: {request.argocd_app_name}")
 
             # Step 15: Monitor GitHub Action and sync ArgoCD
             logger.info("Step 15: Monitoring GitHub Action workflow...")
@@ -557,6 +576,39 @@ class GitOpsManifestController:
         except Exception as e:
             logger.error(f"Manifest generation failed: {str(e)}", exc_info=True)
             raise
+
+    async def cleanup_deployment(
+        self,
+        request: GitOpsManifestRequest,
+        argocd_service: ArgoCDService,
+        github_secret_names: Optional[List[str]] = None,
+        force: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Cleanup deployment resources
+        
+        Args:
+            request: GitOps manifest request with cleanup targets
+            argocd_service: ArgoCD service instance
+            github_secret_names: Optional list of GitHub secret names to delete
+            force: Skip safety validations (use with caution)
+        
+        Returns:
+            Dictionary with cleanup results
+        """
+        logger.info(f"Starting cleanup for {request.microservice_name} in {request.environment}")
+        
+        # Delegate to cleanup service
+        result = await self.cleanup_service.cleanup_deployment(
+            request=request,
+            argocd_service=argocd_service,
+            github_secret_names=github_secret_names,
+            force=force
+        )
+        
+        logger.info(f"Cleanup completed for {request.microservice_name}: success={result.get('success')}")
+        
+        return result
 
 
 # Singleton instance

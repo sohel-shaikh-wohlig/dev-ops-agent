@@ -408,3 +408,44 @@ class GitOpsManifestResponse(BaseModel):
                 "timestamp": "2026-01-19T15:30:00.000000"
             }
         }
+
+class CleanupRequest(BaseModel):
+    """Request model for deployment cleanup"""
+    microservice_name: str = Field(
+        ...,
+        description="Name of the microservice to cleanup"
+    )
+    environment: str = Field(
+        ...,
+        description="Target environment (dev/stage/prod)"
+    )
+    domain_name: str = Field(
+        ...,
+        description="Full domain name (e.g., app.dev.example.com)"
+    )
+    argocd_app_name: str = Field(
+        ...,
+        description="ArgoCD application name"
+    )
+    gitops_repo_url: str = Field(
+        ...,
+        description="GitOps repository URL"
+    )
+    microservice_repo_url: str = Field(
+        ...,
+        description="Microservice repository URL"
+    )
+    github_secret_names: Optional[List[str]] = Field(
+        None,
+        description="⚠️ EXPLICIT OPT-IN: GitHub secret names to delete",
+        example=["DOCKER_USER", "GCP_SA_KEY"]
+    )
+    force: bool = Field(
+        False,
+        description="⚠️ DANGEROUS: Skip safety validations (use with caution)"
+    )
+    audit_comment: Optional[str] = Field(
+        None,
+        description="Required reason for cleanup operation",
+        max_length=500
+    )

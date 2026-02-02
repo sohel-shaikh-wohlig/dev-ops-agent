@@ -63,9 +63,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     elif name == "list_recent_deployments":
         return await list_recent_deployments(arguments)
     
+    elif name == "cleanup_deployment":
+        return await cleanup_deployment(arguments)
+
     elif name == "rollback_deployment":
         return await rollback_deployment(arguments)
-    
+
     else:
         return [TextContent(
             type="text",
@@ -306,6 +309,71 @@ async def rollback_deployment(arguments: dict) -> list[TextContent]:
 
     except Exception as e:
         return [TextContent(type="text", text=f"Error: {str(e)}")]
+
+
+async def cleanup_deployment(arguments: dict) -> list[TextContent]:
+    """Cleanup all resources created by a deployment"""
+    payload = {
+        "microservice_name": arguments["microservice_name"],
+        "environment": arguments["environment"],
+        "domain_name": arguments["domain_name"],
+        "argocd_app_name": arguments["argocd_app_name"],
+        "gitops_repo_url": arguments["gitops_repo_url"],
+        "microservice_repo_url": arguments["microservice_repo_url"],
+        "force": arguments.get("force", False),
+    }
+    if arguments.get("github_secret_names"):
+        payload["github_secret_names"] = arguments["github_secret_names"]
+    if arguments.get("audit_comment"):
+        payload["audit_comment"] = arguments["audit_comment"]
+
+    try:
+        logs = []
+        result_data = None
+        error_message = None
+
+        async for event in api_client.stream_post("/api/gitops/cleanup", payload):
+            event_type = event.get("type")
+
+            if event_type == "log":
+                logs.append(event.get("message", ""))
+            elif event_type == "result":
+                result_data = event.get("data")
+            elif event_type == "error":
+                error_message = event.get("message")
+
+        if error_message:
+            return [TextContent(
+                type="text",
+                text=f"Cleanup failed: {error_message}\n\n"
+                     f"Recent logs:\n" + "\n".join(logs[-20:])
+            )]
+
+        if result_data:
+            success = result_data.get("success", False)
+            status_icon = "Cleanup successful" if success else "Cleanup completed with issues"
+            response_text = f"**{status_icon}**\n\n"
+            response_text += f"**Service:** {arguments['microservice_name']}\n"
+            response_text += f"**Environment:** {arguments['environment']}\n\n"
+
+            steps = result_data.get("steps", {})
+            if steps:
+                response_text += "**Results:**\n"
+                for step_name, step_result in steps.items():
+                    response_text += f"  - {step_name}: {step_result}\n"
+
+            return [TextContent(type="text", text=response_text)]
+
+        return [TextContent(
+            type="text",
+            text="Cleanup completed but no result received."
+        )]
+
+    except Exception as e:
+        return [TextContent(
+            type="text",
+            text=f"Cleanup error: {str(e)}"
+        )]
 
 
 async def main():

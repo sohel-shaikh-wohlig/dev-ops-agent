@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     # Cloudflare
     CLOUDFLARE_TOKEN: str = Field("CLOUDFLARE_TOKEN", description="Cloudflare Token")
     CLOUDFLARE_ZONE_ID: str = Field("CLOUDFLARE_ZONE_ID", description="Cloudflare Zone ID")
+
+    LOAD_BALANCER_IP: str = Field("LOAD_BALANCER_IP", description="Load Balancer IP")
     
     @validator("ARGOCD_SERVER")
     def validate_server_url(cls, v):
