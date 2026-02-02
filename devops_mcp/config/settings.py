@@ -25,7 +25,7 @@ class MCPSettings(BaseSettings):
     
     # ========== Logging ==========
     LOG_LEVEL: str = "INFO"
-    LOG_DIR: Path = Path("logs/mcp")
+    LOG_DIR: Path = Path(__file__).parent.parent.parent / "logs" / "mcp"
     LOG_FILE: str = "devops_automation.log"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     

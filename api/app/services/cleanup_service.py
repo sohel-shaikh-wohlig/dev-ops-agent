@@ -155,14 +155,14 @@ class CleanupService:
                     app_status = argocd_service.get_application_status(request.argocd_app_name)
                     logger.info(f"ArgoCD application '{request.argocd_app_name}' exists")
                     
-                    # Safety check: verify namespace matches expected value
-                    namespace = app_status.get("spec", {}).get("destination", {}).get("namespace")
-                    if not force and namespace != request.environment:
-                        warning = (f"Skipping ArgoCD app deletion - namespace mismatch "
-                                  f"(expected: {request.argocd_app_name}, found: {namespace})")
+                    # Safety check: verify app name matches expected value
+                    app_name = app_status.get("name")
+                    if not force and app_name != request.argocd_app_name:
+                        warning = (f"Skipping ArgoCD app deletion - name mismatch "
+                                  f"(expected: {request.argocd_app_name}, found: {app_name})")
                         logger.warning(warning)
                         results["warnings"].append(warning)
-                        results["components"]["argocd"] = {"status": "skipped", "reason": "namespace_mismatch"}
+                        results["components"]["argocd"] = {"status": "skipped", "reason": "name_mismatch"}
                     else:
                         # First, delete resources from cluster before removing app definition
                         try:
