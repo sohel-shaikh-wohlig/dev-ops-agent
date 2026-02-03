@@ -526,7 +526,7 @@ class GitOpsManifestController:
 
                             logger.info(f"ArgoCD application health status: {health_status}")
 
-                            if health_status == "Missing":
+                            if health_status == "Healthy":
                                 logger.info("ArgoCD application is Healthy. Proceeding to sync...")
                                 break
 
@@ -536,8 +536,8 @@ class GitOpsManifestController:
                         # Wait 10 seconds before next poll
                         await asyncio.sleep(10)
 
-                    if health_status != "Missing":
-                        raise Exception(f"ArgoCD application is not created within timeout. Last status: {health_status}")
+                    if health_status != "Healthy":
+                        raise Exception(f"ArgoCD application is not healthy within timeout. Last status: {health_status}")
 
                     # Step 18: Sync ArgoCD application
                     logger.info("Step 18: Syncing ArgoCD application...")
