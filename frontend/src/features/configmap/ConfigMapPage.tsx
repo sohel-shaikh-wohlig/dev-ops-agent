@@ -29,10 +29,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 import {
-  previewConfigMap,
   updateConfigMap,
   fetchConfigMapValues,
-  type PreviewResponse,
 } from "./services/configmap-service";
 import { ApiError } from "@/services/api-client";
 
@@ -86,8 +84,8 @@ export function ConfigMapPage() {
         if (value.envContent) {
           const lines = value.envContent.split("\n");
           for (const line of lines) {
-            if (line.trim() && !/^[A-Z_0-9]+=[^\n]+$/.test(line)) {
-              return `Invalid format at line: "${line}". Expected KEY=VALUE`;
+            if (line.trim() && !/^[A-Za-z_0-9]+=[^\n]+$/.test(line)) {
+              return `Invalid format at line: "${line}". Expected KEY=VALUE (mixed case allowed)`;
             }
           }
         }
@@ -168,10 +166,10 @@ export function ConfigMapPage() {
     setApiError(null);
 
     // Filter only new/updated keys to prevent unnecessary processing/noise
-    // We rely on values.yaml changes as the source of truth for values
+    // We rely on values.yaml changes or data.env changes as the source of truth for values
     const changedKeys = new Set(
       updateResult.changes
-        .filter((c: any) => c.file === 'values.yaml' && (c.type === 'ADD' || c.type === 'UPDATE'))
+        .filter((c: any) => (c.file === 'values.yaml' || c.file === 'data.env') && (c.type === 'ADD' || c.type === 'UPDATE'))
         .map((c: any) => c.key)
     );
 
@@ -183,16 +181,9 @@ export function ConfigMapPage() {
 
     // specific filtering: retrieve values from the form state to ensure consistency,
     // but only for keys that are marked as changed
+    // specific filtering: retrieve values from the form state to ensure consistency,
+    // but only for keys that are marked as changed
     const formValues = form.state.values;
-    const allEnvLines = formValues.envContent.split('\n');
-    const filteredEnvLines = allEnvLines.filter(line => {
-      const match = line.match(/^([^=]+)=/);
-      if (match) {
-        const key = match[1].trim();
-        return changedKeys.has(key);
-      }
-      return false;
-    });
 
     // Double check we aren't missing anything from the change detection (e.g. if regex failed)
     // Alternatively, we could reconstruct from change.new_value, but keeping original formatting/comments (if any, though we stripped them) is nice.
@@ -200,7 +191,7 @@ export function ConfigMapPage() {
 
     // Better reconstruction approach:
     const filteredEnvContent = updateResult.changes
-      .filter((c: any) => c.file === 'values.yaml' && (c.type === 'ADD' || c.type === 'UPDATE'))
+      .filter((c: any) => (c.file === 'values.yaml' || c.file === 'data.env') && (c.type === 'ADD' || c.type === 'UPDATE'))
       .map((c: any) => `${c.key}=${c.new_value}`)
       .join('\n');
 
@@ -369,6 +360,7 @@ export function ConfigMapPage() {
                     <SelectContent>
                       <SelectItem value="dev">Dev</SelectItem>
                       <SelectItem value="uat">Stage</SelectItem>
+                      <SelectItem value="prod">Prod</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -456,6 +448,7 @@ export function ConfigMapPage() {
                             <SelectContent>
                               <SelectItem value="dev">Dev</SelectItem>
                               <SelectItem value="uat">Stage</SelectItem>
+                              <SelectItem value="prod">Prod</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

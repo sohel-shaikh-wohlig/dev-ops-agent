@@ -132,31 +132,67 @@ def get_values_from_gitops(microservice_name: str, env: str) -> dict:
 
         logger.info(f"Repository cloned successfully to {repo_dir}")
 
-        # Build path to values.yaml: {microservice_name}/values.yaml (no services/ prefix)
-        values_file = repo_dir / microservice_name / "values.yaml"
+        # Determine the config file path based on microservice name
+        if microservice_name.endswith('frontend'):
+            # Frontend services use a different directory structure with data.env
+            config_dir = f"{microservice_name}-env"
+            config_file = repo_dir / config_dir / "data.env"
+            is_frontend = True
+            logger.info(f"Frontend service detected, looking for data.env at: {config_file}")
+        else:
+            # Default path: {microservice_name}/values.yaml
+            config_file = repo_dir / microservice_name / "values.yaml"
+            is_frontend = False
+            logger.info(f"Looking for values.yaml at: {config_file}")
 
-        logger.info(f"Looking for values.yaml at: {values_file}")
+        if not config_file.exists():
+            if is_frontend:
+                raise ValueError(
+                    f"data.env not found at '{microservice_name}-frontend-env/data.env' in the repository. "
+                    f"Please verify the microservice name and repository structure."
+                )
+            else:
+                raise ValueError(
+                    f"values.yaml not found at '{microservice_name}/values.yaml' in the repository. "
+                    f"Please verify the microservice name and repository structure."
+                )
 
-        if not values_file.exists():
-            raise ValueError(
-                f"values.yaml not found at '{microservice_name}/values.yaml' in the repository. "
-                f"Please verify the microservice name and repository structure."
-            )
+        # Parse the config file based on type
+        if is_frontend:
+            # Parse data.env file (KEY=VALUE format)
+            logger.info("Parsing data.env...")
+            config_block = {}
+            with open(config_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    # Skip empty lines and comments
+                    if not line or line.startswith('#'):
+                        continue
+                    if '=' in line:
+                        key, value = line.split('=', 1)
+                        key = key.strip()
+                        value = value.strip()
+                        # Remove quotes if present
+                        if (value.startswith('"') and value.endswith('"')) or \
+                           (value.startswith("'") and value.endswith("'")):
+                            value = value[1:-1]
+                        config_block[key] = value
+        else:
+            # Parse YAML file
+            logger.info("Parsing values.yaml...")
+            with open(config_file, 'r') as f:
+                values_data = yaml.safe_load(f)
 
-        # Parse the YAML file
-        logger.info("Parsing values.yaml...")
-        with open(values_file, 'r') as f:
-            values_data = yaml.safe_load(f)
+            if values_data is None:
+                logger.warning("values.yaml is empty")
+                return {}
 
-        if values_data is None:
-            logger.warning("values.yaml is empty")
-            return {}
-
-        # Extract and return only the 'config' block
-        config_block = values_data.get('config', {})
+            # Extract only the 'config' block
+            config_block = values_data.get('config', {})
 
         if not config_block:
-            logger.info("No 'config' block found in values.yaml, returning empty dict")
+            config_source = "data.env" if is_frontend else "values.yaml"
+            logger.info(f"No config entries found in {config_source}, returning empty dict")
             return {}
 
         # Convert all values to strings (handles bool, int, float, etc.)
