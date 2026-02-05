@@ -90,6 +90,9 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     elif name == "rollback_deployment":
         return await rollback_deployment(arguments)
 
+    elif name == "quick_deploy_microservice":
+        return await quick_deploy_microservice(arguments)
+
     else:
         return [TextContent(
             type="text",
@@ -397,6 +400,58 @@ async def cleanup_deployment(arguments: dict) -> list[TextContent]:
             type="text",
             text=f"Cleanup error: {str(e)}"
         )]
+
+
+def _extract_repo_name(github_url: str) -> str:
+    """
+    Extract repository name from GitHub URL.
+
+    Examples:
+        https://github.com/allvest-wm/poc-star -> poc-star
+        https://github.com/allvest-wm/poc-star.git -> poc-star
+        https://github.com/allvest-wm/user-service/ -> user-service
+    """
+    # Remove trailing slash and .git suffix
+    url = github_url.rstrip("/")
+    if url.endswith(".git"):
+        url = url[:-4]
+
+    # Extract last path segment
+    return url.split("/")[-1]
+
+
+async def quick_deploy_microservice(arguments: dict) -> list[TextContent]:
+    """
+    Simplified deployment requiring only environment and GitHub URL.
+
+    Derives all other parameters and delegates to deploy_microservice.
+    Mirrors the frontend handleProceed logic from GitHubDeployPage.tsx.
+    """
+    environment = arguments["environment"]
+    microservice_github_url = arguments["microservice_github_url"]
+
+    # Extract microservice name from URL
+    microservice_name = _extract_repo_name(microservice_github_url)
+
+    # Derive all parameters (matching frontend handleProceed logic)
+    derived_arguments = {
+        "environment": environment,
+        "microservice_name": microservice_name,
+        "microservice_url": microservice_github_url,
+        "container_port": arguments.get("container_port", settings.DEFAULT_CONTAINER_PORT),
+        "gitops_repo_url": f"{settings.GITHUB_BASE_URL}/{settings.GITOPS_REPO_NAME}.git",
+        "git_repo_name": microservice_name,
+        "git_branch": environment,  # Branch matches environment
+        "argocd_app_name": f"{microservice_name}-{environment}",
+        "domain_name": f"{microservice_name}-{environment}.{settings.DOMAIN_SUFFIX}",
+    }
+
+    # Pass through optional env_content if provided
+    if arguments.get("env_content"):
+        derived_arguments["env_content"] = arguments["env_content"]
+
+    # Delegate to existing deploy_microservice
+    return await deploy_microservice(derived_arguments)
 
 
 async def main():

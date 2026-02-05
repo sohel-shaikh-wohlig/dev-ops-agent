@@ -240,11 +240,6 @@ class DeploymentService:
         logger.info("[Step 0] Validating environment variables...")
         await asyncio.sleep(0)
 
-        # Skip validation if no env_content provided
-        if not request.env_content:
-            logger.info("No env_content provided, skipping environment variable validation")
-            return
-
         # Create temp directory for validation
         validation_session_id = f"validation_{uuid.uuid4().hex[:8]}"
         validation_temp_dir = self.project_root / "app" / "temp" / validation_session_id
@@ -464,8 +459,7 @@ class DeploymentService:
         logger.info("[Step 1] Processing templates...")
         await asyncio.sleep(0)
 
-        if request.env_content:
-            logger.info("Environment variables provided via env_content")
+        logger.info("Environment variables provided via env_content")
 
         # Convert cronjobs models to list of dicts if provided
         cronjobs_list = None
@@ -552,11 +546,6 @@ class DeploymentService:
         config_service: ConfigMapService
     ) -> None:
         """Step 4 & 5: Parse and apply environment variables"""
-        if not request.env_content:
-            logger.info("[Step 4] No env_content provided, skipping environment variable parsing")
-            logger.info("[Step 5] Skipping configuration changes (no env vars)")
-            return
-
         logger.info("[Step 4] Parsing environment variables...")
         await asyncio.sleep(0)
 
