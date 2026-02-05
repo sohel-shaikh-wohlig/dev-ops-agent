@@ -895,8 +895,15 @@ class DeploymentService:
         )
         logger.info(f"✓ ArgoCD application created: {request.microservice_name}")
 
-        # Step 17: Wait for ArgoCD application to be healthy
-        logger.info("[Step 17] Waiting for ArgoCD application to be healthy...")
+        # Step 17: Sync ArgoCD application (must sync BEFORE health check)
+        logger.info("[Step 17] Syncing ArgoCD application...")
+        await asyncio.sleep(0)
+
+        argocd_service.sync_application(request.argocd_app_name)
+        logger.info(f"✓ ArgoCD application sync triggered: {request.argocd_app_name}")
+
+        # Step 18: Wait for ArgoCD application to be healthy
+        logger.info("[Step 18] Waiting for ArgoCD application to be healthy...")
         await asyncio.sleep(0)
 
         health_status = await self._poll_argocd_health(argocd_service, request.argocd_app_name)
@@ -904,39 +911,67 @@ class DeploymentService:
         if health_status != "Healthy":
             raise Exception(f"ArgoCD application is not healthy within timeout. Last status: {health_status}")
 
-        # Step 18: Sync ArgoCD application
-        logger.info("[Step 18] Syncing ArgoCD application...")
-        await asyncio.sleep(0)
-
-        argocd_service.sync_application(request.argocd_app_name)
-        logger.info(f"✓ ArgoCD application synced: {request.argocd_app_name}")
-
     async def _poll_argocd_health(
         self,
         argocd_service: ArgoCDService,
         app_name: str
     ) -> str:
-        """Poll ArgoCD application health status"""
+        """
+        Poll ArgoCD application health status.
+
+        Health status meanings:
+        - Healthy: All resources are healthy
+        - Progressing: Resources are being deployed (transient)
+        - Missing: Resources not yet created (transient after sync)
+        - Degraded: One or more resources have issues
+        - Suspended: Application is suspended
+        - Unknown: Health status cannot be determined
+        """
         health_status = None
+        sync_status = None
         max_attempts = 60
+
+        # Transient states that indicate deployment is still in progress
+        transient_states = {"Missing", "Progressing", None}
 
         for attempt in range(1, max_attempts + 1):
             logger.info(f"Checking ArgoCD health status (attempt {attempt}/{max_attempts})...")
 
             try:
                 app_status = argocd_service.get_application_status(app_name)
+
+                # Get health status
                 health_info = app_status.get("health", {})
                 health_status = health_info.get("status")
 
-                logger.info(f"ArgoCD application health status: {health_status}")
+                # Get sync status for additional context
+                sync_info = app_status.get("sync", {})
+                sync_status = sync_info.get("status")
+
+                logger.info(f"ArgoCD application - Health: {health_status}, Sync: {sync_status}")
 
                 if health_status == "Healthy":
                     logger.info("✓ ArgoCD application is Healthy")
                     return health_status
 
+                if health_status == "Degraded":
+                    # Degraded is a terminal failure state
+                    logger.error(f"ArgoCD application is Degraded")
+                    return health_status
+
+                if health_status == "Suspended":
+                    # Suspended apps won't become healthy without intervention
+                    logger.warning(f"ArgoCD application is Suspended")
+                    return health_status
+
+                # For transient states (Missing, Progressing), continue polling
+                if health_status in transient_states:
+                    logger.info(f"Status '{health_status}' is transient, continuing to poll...")
+
             except Exception as e:
                 logger.warning(f"Error fetching health status: {e}")
 
-            time.sleep(HEALTH_POLL_INTERVAL)
+            await asyncio.sleep(HEALTH_POLL_INTERVAL)
 
+        logger.warning(f"Health check timed out. Final status - Health: {health_status}, Sync: {sync_status}")
         return health_status
