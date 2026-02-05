@@ -30,13 +30,48 @@ class Settings(BaseSettings):
         """Convert string to Path if needed"""
         return Path(v) if isinstance(v, str) else v
     
-    # ArgoCD Server Configuration
-    ARGOCD_SERVER: str = Field(..., description="ArgoCD server URL")
-    
-    # Authentication - Use either token or username/password
+    # ==========================================================================
+    # ArgoCD Configuration (Environment-Specific)
+    # ==========================================================================
+    # The ArgoCD service supports dynamic environment selection. For each
+    # environment, add the corresponding _SUFFIX settings:
+    #   - Default: ARGOCD_SERVER, ARGOCD_USERNAME, ARGOCD_PASSWORD, ARGOCD_TOKEN
+    #   - DEV:     ARGOCD_SERVER_DEV, ARGOCD_USERNAME_DEV, etc.
+    #   - UAT:     ARGOCD_SERVER_UAT, ARGOCD_USERNAME_UAT, etc.
+    #   - STAGING: ARGOCD_SERVER_STAGING, ARGOCD_USERNAME_STAGING, etc.
+    #   - PROD:    ARGOCD_SERVER_PROD, ARGOCD_USERNAME_PROD, etc.
+    # ==========================================================================
+
+    # Default ArgoCD Configuration (used when env is None or 'default')
+    # Optional: If not set, environment-specific servers (ARGOCD_SERVER_DEV, etc.) must be used
+    ARGOCD_SERVER: Optional[str] = Field(None, description="ArgoCD server URL (default)")
     ARGOCD_TOKEN: Optional[str] = Field(None, description="ArgoCD authentication token")
     ARGOCD_USERNAME: Optional[str] = Field(None, description="ArgoCD username")
     ARGOCD_PASSWORD: Optional[str] = Field(None, description="ArgoCD password")
+
+    # DEV Environment ArgoCD Configuration
+    ARGOCD_SERVER_DEV: Optional[str] = Field(None, description="ArgoCD server URL for DEV")
+    ARGOCD_TOKEN_DEV: Optional[str] = Field(None, description="ArgoCD token for DEV")
+    ARGOCD_USERNAME_DEV: Optional[str] = Field(None, description="ArgoCD username for DEV")
+    ARGOCD_PASSWORD_DEV: Optional[str] = Field(None, description="ArgoCD password for DEV")
+
+    # UAT Environment ArgoCD Configuration
+    ARGOCD_SERVER_UAT: Optional[str] = Field(None, description="ArgoCD server URL for UAT")
+    ARGOCD_TOKEN_UAT: Optional[str] = Field(None, description="ArgoCD token for UAT")
+    ARGOCD_USERNAME_UAT: Optional[str] = Field(None, description="ArgoCD username for UAT")
+    ARGOCD_PASSWORD_UAT: Optional[str] = Field(None, description="ArgoCD password for UAT")
+
+    # STAGING Environment ArgoCD Configuration
+    ARGOCD_SERVER_STAGING: Optional[str] = Field(None, description="ArgoCD server URL for STAGING")
+    ARGOCD_TOKEN_STAGING: Optional[str] = Field(None, description="ArgoCD token for STAGING")
+    ARGOCD_USERNAME_STAGING: Optional[str] = Field(None, description="ArgoCD username for STAGING")
+    ARGOCD_PASSWORD_STAGING: Optional[str] = Field(None, description="ArgoCD password for STAGING")
+
+    # PROD Environment ArgoCD Configuration
+    ARGOCD_SERVER_PROD: Optional[str] = Field(None, description="ArgoCD server URL for PROD")
+    ARGOCD_TOKEN_PROD: Optional[str] = Field(None, description="ArgoCD token for PROD")
+    ARGOCD_USERNAME_PROD: Optional[str] = Field(None, description="ArgoCD username for PROD")
+    ARGOCD_PASSWORD_PROD: Optional[str] = Field(None, description="ArgoCD password for PROD")
     
     # SSL Configuration
     VERIFY_SSL: bool = Field(True, description="Verify SSL certificates")
@@ -72,11 +107,38 @@ class Settings(BaseSettings):
     CLOUDFLARE_TOKEN: str = Field("CLOUDFLARE_TOKEN", description="Cloudflare Token")
     CLOUDFLARE_ZONE_ID: str = Field("CLOUDFLARE_ZONE_ID", description="Cloudflare Zone ID")
 
-    LOAD_BALANCER_IP: str = Field("LOAD_BALANCER_IP", description="Load Balancer IP")
+    # ==========================================================================
+    # Infrastructure - Load Balancer IPs (Environment-Specific)
+    # ==========================================================================
+    # The Cloudflare service supports dynamic environment selection for LB IPs.
+    # For each environment, add the corresponding _SUFFIX settings:
+    #   - Default: LOAD_BALANCER_IP
+    #   - DEV:     LOAD_BALANCER_IP_DEV
+    #   - UAT:     LOAD_BALANCER_IP_UAT
+    #   - STAGING: LOAD_BALANCER_IP_STAGING
+    #   - PROD:    LOAD_BALANCER_IP_PROD
+    # ==========================================================================
+
+    # Default Load Balancer IP (used when env is None or 'default')
+    LOAD_BALANCER_IP: str = Field("34.180.18.42", description="Load balancer IP for DNS records (default)")
+
+    # DEV Environment Load Balancer IP
+    LOAD_BALANCER_IP_DEV: Optional[str] = Field(None, description="Load balancer IP for DEV environment")
+
+    # UAT Environment Load Balancer IP
+    LOAD_BALANCER_IP_UAT: Optional[str] = Field(None, description="Load balancer IP for UAT environment")
+
+    # STAGING Environment Load Balancer IP
+    LOAD_BALANCER_IP_STAGING: Optional[str] = Field(None, description="Load balancer IP for STAGING environment")
+
+    # PROD Environment Load Balancer IP
+    LOAD_BALANCER_IP_PROD: Optional[str] = Field(None, description="Load balancer IP for PROD environment")
     
-    @validator("ARGOCD_SERVER")
+    @validator("ARGOCD_SERVER", pre=True)
     def validate_server_url(cls, v):
-        """Ensure server URL doesn't end with /"""
+        """Ensure server URL doesn't end with / (if provided)"""
+        if v is None:
+            return v
         return v.rstrip("/")
     
     @validator("ALLOWED_ORIGINS")

@@ -1,9 +1,16 @@
 """
 GitOps Routes
 FastAPI endpoints for GitOps manifest generation
+
+Automatically uses environment-specific ArgoCD configuration based on
+the 'environment' field in the request body.
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
+import uuid
+import json
+import asyncio
+from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import StreamingResponse
 
 from app.controllers.gitops_manifest_controller import gitops_manifest_controller
 from app.models.gitops import (
@@ -12,37 +19,44 @@ from app.models.gitops import (
 )
 from app.models.common import ErrorResponse
 from app.core.logging_config import logger
-from app.core.dependencies import get_argocd_service
-from app.services.argocd_service import ArgoCDService
+from app.core.dependencies import create_argocd_service_for_env
+from app.core.log_stream import request_id_ctx, log_stream_handler
 
 router = APIRouter(prefix="/gitops", tags=["GitOps Manifest Generation"])
 
-
-import uuid
-import json
-import asyncio
-from fastapi.responses import StreamingResponse
-from app.core.log_stream import request_id_ctx, log_stream_handler
 
 @router.post(
     "/micro-service",
     status_code=status.HTTP_200_OK,
     summary="Generate GitOps Manifests",
-    description="Generate Kubernetes manifests from templates with variable substitution",
+    description="Generate Kubernetes manifests from templates with variable substitution. "
+                "Automatically uses environment-specific ArgoCD configuration based on the "
+                "'environment' field (e.g., 'uat' uses UAT ArgoCD server and credentials).",
     responses={
         400: {"model": ErrorResponse, "description": "Invalid request or validation error"},
         500: {"model": ErrorResponse, "description": "Internal server error"}
     }
 )
 async def generate_microservice_manifests(
-    request: GitOpsManifestRequest,
-    argocd_service: ArgoCDService = Depends(get_argocd_service)
+    request: GitOpsManifestRequest
 ):
     """
     **Generate GitOps Manifests for Microservice** - Streaming Response
+
+    The ArgoCD service is automatically configured based on the 'environment'
+    field in the request:
+    - environment='uat': Uses UAT ArgoCD server and credentials
+    - Other environments: Uses default ArgoCD configuration
     """
     request_id = str(uuid.uuid4())
-    
+
+    # Get environment value from request for ArgoCD service configuration
+    env_value = request.environment.value if hasattr(request.environment, 'value') else str(request.environment)
+
+    # Create environment-specific ArgoCD service
+    argocd_service = create_argocd_service_for_env(env=env_value)
+    logger.info(f"Created ArgoCD service for environment: {env_value}")
+
     async def event_generator():
         # Set context and register handler
         token = request_id_ctx.set(request_id)
