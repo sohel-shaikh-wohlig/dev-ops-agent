@@ -42,6 +42,7 @@ class GitOpsManifestController:
     def __init__(self):
         """Initialize controller with new template service instance per request"""
         self.template_service = GitOpsTemplateService()
+        self.cleanup_service = CleanupService()
         logger.info("GitOpsManifestController initialized")
 
     def _find_microservice_path(
@@ -101,6 +102,7 @@ class GitOpsManifestController:
         logger.info(f"Environment: {request.environment}")
         if request.env_content:
             logger.info(f"Environment variables provided via env_content")
+        await asyncio.sleep(0)
 
         try:
             # Get environment value as string
@@ -134,6 +136,7 @@ class GitOpsManifestController:
                 logger.info("No Worker configuration provided - skipping worker setup")
 
             # Process templates with env_content (same format as ConfigMap)
+            await asyncio.sleep(0)
             result = self.template_service.process_template(
                 microservice_name=request.microservice_name,
                 microservice_url=request.microservice_url,
@@ -162,6 +165,7 @@ class GitOpsManifestController:
 
             # Step 2: Locating microservice...
             logger.info("Step 2: Locating microservice...")
+            await asyncio.sleep(0)
             repo_dir = self.template_service.output_base_dir
 
             # Output structure: repo_dir/git-ops/microservice_name/ (helm chart)
@@ -178,6 +182,7 @@ class GitOpsManifestController:
 
             # Step 3: Initialize config service with git-ops path (contains values.yaml and templates/)
             logger.info("Step 3: Initializing configuration service...")
+            await asyncio.sleep(0)
             config_service = ConfigMapService(gitops_path)
 
             # Validate structure
@@ -185,27 +190,32 @@ class GitOpsManifestController:
             if not is_valid:
                 raise Exception(f"Invalid microservice structure: {error_msg}")
 
-            # Step 4: Parse environment variables
-            logger.info("Step 4: Parsing environment variables...")
-            if not request.env_content:
-                raise Exception("No .env content provided in request")
+            # Step 4: Parse environment variables (optional)
+            env_vars = {}
+            if request.env_content:
+                logger.info("Step 4: Parsing environment variables...")
+                await asyncio.sleep(0)
+                env_vars = config_service.parse_env_content(request.env_content)
 
-            env_vars = config_service.parse_env_content(request.env_content)
+                if not env_vars:
+                    raise Exception("No valid environment variables found in .env content")
 
-            if not env_vars:
-                raise Exception("No valid environment variables found in .env content")
+                logger.info(f"Parsed {len(env_vars)} environment variables")
 
-            logger.info(f"Parsed {len(env_vars)} environment variables")
+                # Step 5: Apply configuration changes
+                logger.info("Step 5: Applying configuration changes...")
+                await asyncio.sleep(0)
+                changes = config_service.apply_changes(env_vars)
 
-            # Step 5: Apply configuration changes
-            logger.info("Step 5: Applying configuration changes...")
-            changes = config_service.apply_changes(env_vars)
-
-            if not changes:
-                logger.info("No changes detected - all values already up to date")
+                if not changes:
+                    logger.info("No changes detected - all values already up to date")
+            else:
+                logger.info("Step 4: No env_content provided, skipping environment variable parsing")
+                logger.info("Step 5: Skipping configuration changes (no env vars)")
 
             # Step 6: Clone GitOps repository
             logger.info("Step 6: Cloning GitOps repository...")
+            await asyncio.sleep(0)
             project_root = Path(__file__).parent.parent.parent
             clone_repo_dir =  project_root / "app" / "temp" / self.template_service.session_id / "repo"
             success, error = git_service.clone_repository(
@@ -222,6 +232,7 @@ class GitOpsManifestController:
 
             # Step 7: Move template output folder to cloned repository
             logger.info("Step 7: Moving generated manifests to cloned repository...")
+            await asyncio.sleep(0)
             # Source structure: output_base_dir/git-ops/microservice_name/
             source_dir = self.template_service.output_base_dir / "git-ops" / request.microservice_name
             destination_dir = clone_repo_dir / request.microservice_name
@@ -237,6 +248,7 @@ class GitOpsManifestController:
 
             # Step 8: Git commit and push
             logger.info("Step 8: Committing and pushing changes to Git...")
+            await asyncio.sleep(0)
             git_committed = False
             git_commit_hash = None
 
@@ -245,13 +257,15 @@ class GitOpsManifestController:
                 raise Exception("Could not find git root in cloned repository")
 
             # Add all changes
-            success, error = git_service.add_all(git_root)
+            success, error = await asyncio.to_thread(git_service.add_all, git_root)
             if not success:
                 raise Exception(f"Failed to add changes: {error}")
 
             # Commit changes
             commit_msg = f"Added/Updated GitOps manifests for {request.microservice_name} in {env_value}"
-            success, error, commit_hash = git_service.commit_changes(git_root, commit_msg)
+            success, error, commit_hash = await asyncio.to_thread(
+                git_service.commit_changes, git_root, commit_msg
+            )
 
             if not success:
                 if "nothing to commit" in str(error).lower():
@@ -264,7 +278,7 @@ class GitOpsManifestController:
                 logger.info(f"Changes committed with hash: {commit_hash}")
 
                 # Push changes
-                success, error = git_service.push_changes(git_root)
+                success, error = await asyncio.to_thread(git_service.push_changes, git_root)
                 if not success:
                     raise Exception(f"Failed to push changes: {error}")
 
@@ -272,15 +286,17 @@ class GitOpsManifestController:
 
             # Step 9: Create GitHub repository secrets
             logger.info("Step 9: Creating GitHub repository secrets...")
+            await asyncio.sleep(0)
             secrets_file = self.template_service.output_base_dir / "github" / request.microservice_name / "secrets.txt"
 
             # Extract repo name from microservice_url (e.g., https://github.com/owner/repo.git -> repo)
             repo_name = request.microservice_url.rstrip('/').removesuffix('.git').split('/')[-1]
-            
+
             if not secrets_file.exists():
                 raise Exception(f"Secrets file not found at: {secrets_file}")
 
-            success, error = git_service.create_repository_secrets(
+            success, error = await asyncio.to_thread(
+                git_service.create_repository_secrets,
                 secrets_file=secrets_file,
                 owner="allvest-wm",
                 repo=repo_name
@@ -292,9 +308,11 @@ class GitOpsManifestController:
             logger.info(f"Repository secrets created successfully for {repo_name}")
 
             # Step 10: Clone microservice repo for GitHub workflows
-            logger.info("Step 9: Cloning microservice repository for GitHub workflows...")
+            logger.info("Step 10: Cloning microservice repository for GitHub workflows...")
+            await asyncio.sleep(0)
             microservice_repo_dir = project_root / "app" / "temp" / self.template_service.session_id / "microservice-repo"
-            success, error = git_service.clone_repository(
+            success, error = await asyncio.to_thread(
+                git_service.clone_repository,
                 request.microservice_url,
                 microservice_repo_dir,
                 branch=env_value
@@ -307,6 +325,7 @@ class GitOpsManifestController:
 
             # Step 11: Create .github/workflows folder and move workflow file
             logger.info("Step 11: Setting up GitHub workflows...")
+            await asyncio.sleep(0)
             workflows_dir = microservice_repo_dir / ".github" / "workflows"
             workflows_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"Created workflows directory: {workflows_dir}")
@@ -324,16 +343,19 @@ class GitOpsManifestController:
 
             # Step 12: Commit and push GitHub workflows
             logger.info("Step 12: Committing and pushing GitHub workflows...")
+            await asyncio.sleep(0)
             ms_git_root = git_service.find_git_root(microservice_repo_dir)
             if not ms_git_root:
                 raise Exception("Could not find git root in microservice repository")
 
-            success, error = git_service.add_all(ms_git_root)
+            success, error = await asyncio.to_thread(git_service.add_all, ms_git_root)
             if not success:
                 raise Exception(f"Failed to add workflow changes: {error}")
 
             workflow_commit_msg = f"Added/Updated GitHub workflow for {env_value} environment"
-            success, error, workflow_commit_hash = git_service.commit_changes(ms_git_root, workflow_commit_msg)
+            success, error, workflow_commit_hash = await asyncio.to_thread(
+                git_service.commit_changes, ms_git_root, workflow_commit_msg
+            )
 
             if not success:
                 if "nothing to commit" in str(error).lower():
@@ -343,7 +365,7 @@ class GitOpsManifestController:
             else:
                 logger.info(f"Workflow changes committed with hash: {workflow_commit_hash}")
 
-                success, error = git_service.push_changes(ms_git_root)
+                success, error = await asyncio.to_thread(git_service.push_changes, ms_git_root)
                 if not success:
                     raise Exception(f"Failed to push workflow changes: {error}")
 
@@ -351,6 +373,7 @@ class GitOpsManifestController:
 
             # Step 13: Clean up temp folder
             logger.info("Step 13: Cleaning up temp folder...")
+            await asyncio.sleep(0)
             temp_session_dir = project_root / "app" / "temp" / self.template_service.session_id
             if temp_session_dir.exists():
                 shutil.rmtree(temp_session_dir)
@@ -375,6 +398,7 @@ class GitOpsManifestController:
 
             # Step 15: Monitor GitHub Action and sync ArgoCD
             logger.info("Step 15: Monitoring GitHub Action workflow...")
+            await asyncio.sleep(0)
 
             # Wait 10 seconds for GitHub Action to start
             await asyncio.sleep(10)
@@ -464,6 +488,7 @@ class GitOpsManifestController:
 
                     # Step 16: Create ArgoCD application
                     logger.info("Step 16: Creating ArgoCD application...")
+                    await asyncio.sleep(0)
                     argocd_result = argocd_service.create_application(
                         name=request.argocd_app_name,
                         project=env_value,
@@ -476,6 +501,7 @@ class GitOpsManifestController:
 
                     # Step 17: Wait for ArgoCD application to be created before syncing
                     logger.info("Step 17: Waiting for ArgoCD application to be created...")
+                    await asyncio.sleep(0)
 
                     health_status = None
                     health_max_attempts = 60  # Max 10 minutes (60 * 10 seconds)
@@ -507,6 +533,7 @@ class GitOpsManifestController:
 
                     # Step 18: Sync ArgoCD application
                     logger.info("Step 18: Syncing ArgoCD application...")
+                    await asyncio.sleep(0)
                     sync_result = argocd_service.sync_application(request.argocd_app_name)
                     logger.info(f"ArgoCD application synced successfully: {request.argocd_app_name}")
 
@@ -541,6 +568,39 @@ class GitOpsManifestController:
         except Exception as e:
             logger.error(f"Manifest generation failed: {str(e)}", exc_info=True)
             raise
+
+    async def cleanup_deployment(
+        self,
+        request: GitOpsManifestRequest,
+        argocd_service: ArgoCDService,
+        github_secret_names: Optional[List[str]] = None,
+        force: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Cleanup deployment resources
+        
+        Args:
+            request: GitOps manifest request with cleanup targets
+            argocd_service: ArgoCD service instance
+            github_secret_names: Optional list of GitHub secret names to delete
+            force: Skip safety validations (use with caution)
+        
+        Returns:
+            Dictionary with cleanup results
+        """
+        logger.info(f"Starting cleanup for {request.microservice_name} in {request.environment}")
+        
+        # Delegate to cleanup service
+        result = await self.cleanup_service.cleanup_deployment(
+            request=request,
+            argocd_service=argocd_service,
+            github_secret_names=github_secret_names,
+            force=force
+        )
+        
+        logger.info(f"Cleanup completed for {request.microservice_name}: success={result.get('success')}")
+        
+        return result
 
 
 # Singleton instance

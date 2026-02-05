@@ -28,12 +28,12 @@ class LogStreamHandler(logging.Handler):
             del self.queues[request_id]
 
     def emit(self, record: logging.LogRecord):
-        """Emit a log record to the appropriate queue"""
+        """Emit a log record to the appropriate queue (thread-safe)"""
         try:
             request_id = request_id_ctx.get()
             if request_id and request_id in self.queues:
                 msg = self.format(record)
-                
+
                 # Create a structured log message
                 log_entry = {
                     "type": "log",
@@ -41,12 +41,21 @@ class LogStreamHandler(logging.Handler):
                     "message": msg,
                     "timestamp": record.created
                 }
-                
-                # Put in queue (non-blocking)
+
+                queue = self.queues[request_id]
+                item = json.dumps(log_entry)
+
+                # Use call_soon_threadsafe when called from a worker thread,
+                # fall back to put_nowait when on the event loop thread.
                 try:
-                    self.queues[request_id].put_nowait(json.dumps(log_entry))
-                except asyncio.QueueFull:
-                    pass
+                    loop = asyncio.get_running_loop()
+                    loop.call_soon_threadsafe(queue.put_nowait, item)
+                except RuntimeError:
+                    # No running loop (shouldn't happen, but be safe)
+                    try:
+                        queue.put_nowait(item)
+                    except asyncio.QueueFull:
+                        pass
         except Exception:
             self.handleError(record)
 
