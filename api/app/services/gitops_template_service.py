@@ -43,6 +43,18 @@ class GitOpsTemplateService:
     PLACEHOLDER_WORKER_YAML = "{{WORKER_YAML}}"
     PLACEHOLDER_WORKER_COUNT = "{{WORKER_COUNT}}"
 
+    # UAT-specific Istio placeholders (gateway and virtualservice)
+    PLACEHOLDER_GATEWAY_YAML = "{{GATEWAY_YAML}}"
+    PLACEHOLDER_VIRTUALSERVICE_YAML = "{{VIRTUALSERVICE_YAML}}"
+
+    # Environment constants
+    ENV_UAT = "uat"
+    ENV_DEV = "dev"
+
+    # Workflow file names (environment-specific)
+    WORKFLOW_FILE_DEV = "workflows.yaml"
+    WORKFLOW_FILE_UAT = "workflows-uat.yaml"
+
     def __init__(
         self,
         template_dir: Optional[Path] = None,
@@ -648,6 +660,223 @@ spec:
 """
         return manifest
 
+    def generate_gateway_manifest(
+        self,
+        microservice_name: str,
+        domain_name: str,
+        output_dir: Path,
+        base_replacements: Dict[str, str]
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate Istio Gateway manifest for UAT environment.
+
+        Creates a gateway.yaml file that configures Istio ingress gateway
+        for the microservice.
+
+        Args:
+            microservice_name: Name of the microservice
+            domain_name: Domain name for the gateway host
+            output_dir: Directory to write the generated manifest file
+            base_replacements: Base replacement map for common placeholders
+
+        Returns:
+            List with a single dictionary containing info about the generated file
+        """
+        generated_files = []
+
+        output_filename = "gateway.yaml"
+        output_file = output_dir / output_filename
+
+        logger.info(f"Generating Istio Gateway manifest: {output_filename}")
+
+        # Build the Gateway manifest
+        gateway_content = self._build_gateway_manifest(microservice_name, domain_name)
+
+        # Apply base replacements for other placeholders
+        replacement_count = 0
+        for placeholder, value in base_replacements.items():
+            count = gateway_content.count(placeholder)
+            if count > 0:
+                gateway_content = gateway_content.replace(placeholder, value)
+                replacement_count += count
+
+        # Ensure output directory exists
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write the generated manifest
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(gateway_content)
+
+        generated_files.append({
+            'source_path': 'generated/gateway.yaml',
+            'output_path': str(output_file),
+            'manifest_type': 'gateway',
+            'replacements_made': replacement_count
+        })
+
+        logger.info(f"Generated Istio Gateway manifest: {output_file}")
+        return generated_files
+
+    def _build_gateway_manifest(
+        self,
+        microservice_name: str,
+        domain_name: str
+    ) -> str:
+        """
+        Build Istio Gateway manifest YAML.
+
+        Args:
+            microservice_name: Name of the microservice
+            domain_name: Domain name for the gateway host
+
+        Returns:
+            Complete Gateway manifest YAML string
+        """
+        manifest = f"""apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: {{{{ .Values.name }}}}-gateway
+  labels:
+    application: {{{{ .Values.labels.application }}}}
+    env: {{{{ .Values.labels.env }}}}
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - {{{{ .Values.domainName | quote }}}}
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        credentialName: {{{{ .Values.name }}}}-tls
+      hosts:
+        - {{{{ .Values.domainName | quote }}}}
+"""
+        return manifest
+
+    def generate_virtualservice_manifest(
+        self,
+        microservice_name: str,
+        domain_name: str,
+        container_port: int,
+        output_dir: Path,
+        base_replacements: Dict[str, str]
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate Istio VirtualService manifest for UAT environment.
+
+        Creates a virtualservice.yaml file that configures routing rules
+        for the microservice.
+
+        Args:
+            microservice_name: Name of the microservice
+            domain_name: Domain name for the virtual service host
+            container_port: Container port for routing
+            output_dir: Directory to write the generated manifest file
+            base_replacements: Base replacement map for common placeholders
+
+        Returns:
+            List with a single dictionary containing info about the generated file
+        """
+        generated_files = []
+
+        output_filename = "virtualservice.yaml"
+        output_file = output_dir / output_filename
+
+        logger.info(f"Generating Istio VirtualService manifest: {output_filename}")
+
+        # Build the VirtualService manifest
+        virtualservice_content = self._build_virtualservice_manifest(
+            microservice_name, domain_name, container_port
+        )
+
+        # Apply base replacements for other placeholders
+        replacement_count = 0
+        for placeholder, value in base_replacements.items():
+            count = virtualservice_content.count(placeholder)
+            if count > 0:
+                virtualservice_content = virtualservice_content.replace(placeholder, value)
+                replacement_count += count
+
+        # Ensure output directory exists
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write the generated manifest
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(virtualservice_content)
+
+        generated_files.append({
+            'source_path': 'generated/virtualservice.yaml',
+            'output_path': str(output_file),
+            'manifest_type': 'virtualservice',
+            'replacements_made': replacement_count
+        })
+
+        logger.info(f"Generated Istio VirtualService manifest: {output_file}")
+        return generated_files
+
+    def _build_virtualservice_manifest(
+        self,
+        microservice_name: str,
+        domain_name: str,
+        container_port: int
+    ) -> str:
+        """
+        Build Istio VirtualService manifest YAML.
+
+        Args:
+            microservice_name: Name of the microservice
+            domain_name: Domain name for the virtual service host
+            container_port: Container port for routing
+
+        Returns:
+            Complete VirtualService manifest YAML string
+        """
+        manifest = f"""apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: {{{{ .Values.name }}}}-vs
+  labels:
+    application: {{{{ .Values.labels.application }}}}
+    env: {{{{ .Values.labels.env }}}}
+spec:
+  hosts:
+    - {{{{ .Values.domainName | quote }}}}
+  gateways:
+    - {{{{ .Values.name }}}}-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: {{{{ .Values.name }}}}
+            port:
+              number: {{{{ .Values.containerPort }}}}
+      corsPolicy:
+        allowOrigins:
+          - regex: ".*"
+        allowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - PATCH
+          - OPTIONS
+        allowHeaders:
+          - "*"
+        allowCredentials: true
+        maxAge: "24h"
+"""
+        return manifest
+
     def build_replacement_map(
         self,
         microservice_name: str,
@@ -941,12 +1170,102 @@ spec:
                         logger.info(f"Skipping {relative_path} - 'bq' not in worker secrets")
                         continue
 
+                # Environment-specific httpproxy.yaml handling
+                # UAT: Skip httpproxy.yaml (uses Istio Gateway/VirtualService instead)
+                # DEV: Include httpproxy.yaml normally
+                if template_file.name == 'httpproxy.yaml':
+                    if environment.lower() == self.ENV_UAT:
+                        logger.info(f"Skipping {relative_path} - httpproxy.yaml is not used in UAT environment")
+                        continue
+
+                # Environment-specific virtual-service.yaml handling
+                # UAT: Copy as-is without templating
+                # DEV: Skip (not used in dev environment)
+                if template_file.name == 'virtual-service.yaml':
+                    if environment.lower() == self.ENV_DEV:
+                        logger.info(f"Skipping {relative_path} - virtual-service.yaml is not used in DEV environment")
+                        continue
+                    elif environment.lower() == self.ENV_UAT:
+                        # For UAT: Copy the file directly without template processing
+                        logger.info(f"Copying {relative_path} as-is for UAT environment (no templating)")
+                        path_parts = relative_path.parts
+                        if len(path_parts) >= 1:
+                            template_folder = path_parts[0]
+                            rest_of_path = Path(*path_parts[1:]) if len(path_parts) > 1 else Path("")
+                            output_file = self.output_base_dir / template_folder / microservice_name / rest_of_path
+                        else:
+                            output_file = self.output_base_dir / microservice_name / relative_path
+
+                        output_file.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(template_file, output_file)
+
+                        processed_files.append({
+                            'source_path': str(template_file),
+                            'output_path': str(output_file),
+                            'replacements_made': 0,
+                            'copy_mode': 'direct'
+                        })
+                        logger.info(f"Copied: {relative_path} (direct copy, no templating)")
+                        continue
+
+                # Environment-specific gateway.yaml handling
+                # UAT: Process gateway.yaml normally (will be generated later)
+                # DEV: Skip gateway.yaml (not used in dev environment)
+                if template_file.name == 'gateway.yaml':
+                    if environment.lower() == self.ENV_DEV:
+                        logger.info(f"Skipping {relative_path} - gateway.yaml is not used in DEV environment")
+                        continue
+                    elif environment.lower() == self.ENV_UAT:
+                        logger.info(f"Skipping {relative_path} - will generate gateway manifest for UAT")
+                        continue
+                    else:
+                        # For other environments, skip by default
+                        logger.info(f"Skipping {relative_path} - gateway.yaml is only for UAT environment")
+                        continue
+
+                # Note: virtualservice.yaml (without hyphen) handling
+                # This is for dynamically generated files, virtual-service.yaml (with hyphen) is handled above
+                if template_file.name == 'virtualservice.yaml':
+                    if environment.lower() == self.ENV_DEV:
+                        logger.info(f"Skipping {relative_path} - virtualservice.yaml is not used in DEV environment")
+                        continue
+                    elif environment.lower() == self.ENV_UAT:
+                        logger.info(f"Skipping {relative_path} - will generate virtualservice manifest for UAT")
+                        continue
+                    else:
+                        # For other environments, skip by default
+                        logger.info(f"Skipping {relative_path} - virtualservice.yaml is only for UAT environment")
+                        continue
+
+                # Environment-specific workflow file selection
+                # For UAT: use workflows-uat.yaml, skip workflows.yaml
+                # For other environments: use workflows.yaml, skip workflows-uat.yaml
+                if template_file.name == self.WORKFLOW_FILE_DEV:
+                    if environment.lower() == self.ENV_UAT:
+                        logger.info(f"Skipping {relative_path} - using {self.WORKFLOW_FILE_UAT} for UAT environment")
+                        continue
+
+                if template_file.name == self.WORKFLOW_FILE_UAT:
+                    if environment.lower() != self.ENV_UAT:
+                        logger.info(f"Skipping {relative_path} - {self.WORKFLOW_FILE_UAT} is only for UAT environment")
+                        continue
+                    else:
+                        # For UAT, rename the output file to workflows.yaml (standard name)
+                        logger.info(f"Using {self.WORKFLOW_FILE_UAT} for UAT environment (will be output as {self.WORKFLOW_FILE_DEV})")
+
                 # Insert microservice_name after the template folder (git-ops or github)
                 # Structure: output_base_dir/git-ops/microservice_name/values.yaml
                 path_parts = relative_path.parts
                 if len(path_parts) >= 1:
                     template_folder = path_parts[0]  # git-ops or github
                     rest_of_path = Path(*path_parts[1:]) if len(path_parts) > 1 else Path("")
+
+                    # For UAT environment: rename workflows-uat.yaml to workflows.yaml in output
+                    if template_file.name == self.WORKFLOW_FILE_UAT and environment.lower() == self.ENV_UAT:
+                        # Replace workflows-uat.yaml with workflows.yaml in the output path
+                        rest_of_path = Path(str(rest_of_path).replace(self.WORKFLOW_FILE_UAT, self.WORKFLOW_FILE_DEV))
+                        logger.info(f"Renaming output file: {self.WORKFLOW_FILE_UAT} -> {self.WORKFLOW_FILE_DEV}")
+
                     output_file = self.output_base_dir / template_folder / microservice_name / rest_of_path
                 else:
                     output_file = self.output_base_dir / microservice_name / relative_path
@@ -1057,6 +1376,92 @@ spec:
                 logger.info(f"Generated {len(worker_files)} worker manifest file")
             else:
                 logger.warning(f"Worker template not found at: {worker_template_path}")
+
+        # Generate Istio Gateway and VirtualService manifests for UAT environment only
+        if environment.lower() == self.ENV_UAT:
+            logger.info(f"=== Generating Istio Manifests for UAT Environment ===")
+
+            # Output directory for Istio manifests (same as other templates)
+            istio_output_dir = self.output_base_dir / "git-ops" / microservice_name / "templates"
+
+            # Check for existing gateway.yaml template, otherwise generate dynamically
+            gateway_template_path = self.template_dir / "git-ops" / "templates" / "gateway.yaml"
+
+            if gateway_template_path.exists():
+                # Use existing template
+                logger.info(f"Found gateway template at: {gateway_template_path}")
+                with open(gateway_template_path, 'r', encoding='utf-8') as f:
+                    gateway_content = f.read()
+
+                # Process content with replacements
+                processed_gateway, gateway_replacement_count = self.process_file_content(
+                    gateway_content, replacements
+                )
+
+                # Write processed content
+                gateway_output_file = istio_output_dir / "gateway.yaml"
+                istio_output_dir.mkdir(parents=True, exist_ok=True)
+                with open(gateway_output_file, 'w', encoding='utf-8') as f:
+                    f.write(processed_gateway)
+
+                processed_files.append({
+                    'source_path': str(gateway_template_path),
+                    'output_path': str(gateway_output_file),
+                    'replacements_made': gateway_replacement_count
+                })
+                logger.info(f"Generated gateway.yaml from template ({gateway_replacement_count} replacements)")
+            else:
+                # Generate dynamically
+                logger.info("No gateway template found, generating dynamically")
+                gateway_files = self.generate_gateway_manifest(
+                    microservice_name=microservice_name,
+                    domain_name=domain_name,
+                    output_dir=istio_output_dir,
+                    base_replacements=replacements
+                )
+                processed_files.extend(gateway_files)
+
+            # Check for existing virtualservice.yaml template, otherwise generate dynamically
+            virtualservice_template_path = self.template_dir / "git-ops" / "templates" / "virtualservice.yaml"
+
+            if virtualservice_template_path.exists():
+                # Use existing template
+                logger.info(f"Found virtualservice template at: {virtualservice_template_path}")
+                with open(virtualservice_template_path, 'r', encoding='utf-8') as f:
+                    virtualservice_content = f.read()
+
+                # Process content with replacements
+                processed_virtualservice, vs_replacement_count = self.process_file_content(
+                    virtualservice_content, replacements
+                )
+
+                # Write processed content
+                virtualservice_output_file = istio_output_dir / "virtualservice.yaml"
+                istio_output_dir.mkdir(parents=True, exist_ok=True)
+                with open(virtualservice_output_file, 'w', encoding='utf-8') as f:
+                    f.write(processed_virtualservice)
+
+                processed_files.append({
+                    'source_path': str(virtualservice_template_path),
+                    'output_path': str(virtualservice_output_file),
+                    'replacements_made': vs_replacement_count
+                })
+                logger.info(f"Generated virtualservice.yaml from template ({vs_replacement_count} replacements)")
+            else:
+                # Generate dynamically
+                logger.info("No virtualservice template found, generating dynamically")
+                virtualservice_files = self.generate_virtualservice_manifest(
+                    microservice_name=microservice_name,
+                    domain_name=domain_name,
+                    container_port=container_port,
+                    output_dir=istio_output_dir,
+                    base_replacements=replacements
+                )
+                processed_files.extend(virtualservice_files)
+
+            logger.info(f"=== Istio Manifests Generation Complete for UAT ===")
+        else:
+            logger.info(f"Skipping Istio manifests - environment '{environment}' is not UAT")
 
         logger.info(f"=== GitOps Template Processing Complete ===")
         logger.info(f"Total files processed: {len(processed_files)}")

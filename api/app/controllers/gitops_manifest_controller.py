@@ -6,9 +6,9 @@ Handles GitOps manifest generation workflow
 import shutil
 import asyncio
 import httpx
+import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from app.services.cleanup_service import CleanupService
+from typing import Optional, Dict, Any, Tuple
 from app.models.gitops import (
     GitOpsManifestRequest,
     GitOpsManifestResponse,
@@ -18,12 +18,18 @@ from app.services.gitops_template_service import GitOpsTemplateService
 from app.services.configmap_service import ConfigMapService
 from app.services.git_service import git_service
 from app.services.argocd_service import ArgoCDService
-from app.services.cloudflare_service import CloudflareService, DNSRecordCreate
+from app.services.cloudflare_service import CloudflareService
 from app.core.logging_config import logger
 from app.core.config import get_settings
 from app.core.exceptions import ArgoCDAPIException
 
 settings = get_settings()
+
+# Health polling constants
+HEALTH_POLL_INTERVAL = 10  # seconds between health checks
+HEALTH_POLL_TIMEOUT = 300  # 5 minutes max wait time
+DELETE_POLL_INTERVAL = 5   # seconds between deletion checks
+DELETE_POLL_TIMEOUT = 120  # 2 minutes max wait for deletion
 
 
 class GitOpsManifestController:
@@ -212,9 +218,12 @@ class GitOpsManifestController:
             await asyncio.sleep(0)
             project_root = Path(__file__).parent.parent.parent
             clone_repo_dir =  project_root / "app" / "temp" / self.template_service.session_id / "repo"
-            success, error = await asyncio.to_thread(
-                git_service.clone_repository, request.gitops_repo_url, clone_repo_dir
+            success, error = git_service.clone_repository(
+                request.gitops_repo_url,
+                clone_repo_dir,
+                branch=env_value  # Use environment-specific branch (dev, uat, etc.)
             )
+            logger.info(f"Cloning GitOps repository on branch: {env_value}")
 
             if not success:
                 raise Exception(f"Failed to clone repository: {error}")
@@ -372,37 +381,20 @@ class GitOpsManifestController:
 
             # Step 14: Create Cloudflare DNS Record
             logger.info("Step 14: Creating Cloudflare DNS record...")
-            await asyncio.sleep(0)
-            cloudflare_service = CloudflareService(api_token=settings.CLOUDFLARE_TOKEN)
 
-            dns_record_data = DNSRecordCreate(
-                type="A",
-                name=request.argocd_app_name,
-                content=settings.LOAD_BALANCER_IP
+            # Initialize CloudflareService with environment to get the correct Load Balancer IP
+            cloudflare_service = CloudflareService(
+                api_token=settings.CLOUDFLARE_TOKEN,
+                env=env_value
             )
+            logger.info(f"Using Load Balancer IP for environment '{env_value}': {cloudflare_service.lb_ip}")
 
-            # Check if a matching record already exists
-            filters = {
-                "name": f"{request.domain_name}",  # Fully qualified name
-                "type": "A",
-                "content": settings.LOAD_BALANCER_IP
-            }
-            # Note: Cloudflare's API expects the full domain name (e.g., app.example.com), not just "app"
-            # So ensure `request.argocd_app_name` is just the subdomain, and you append the zone domain.
-
-            existing_records = await cloudflare_service.list_dns_records(
+            # Use the environment-specific Load Balancer IP from the service
+            dns_result = await cloudflare_service.create_dns_record_for_lb(
                 zone_id=settings.CLOUDFLARE_ZONE_ID,
-                filters=filters
+                name=request.argocd_app_name
             )
-
-            if existing_records["records"]:
-                logger.info(f"DNS record already exists for {request.argocd_app_name}. Skipping creation.")
-            else:
-                dns_result = await cloudflare_service.create_dns_record(
-                    zone_id=settings.CLOUDFLARE_ZONE_ID,
-                    record_data=dns_record_data
-                )
-                logger.info(f"Cloudflare DNS record created successfully: {request.argocd_app_name}")
+            logger.info(f"Cloudflare DNS record created successfully: {request.argocd_app_name} -> {cloudflare_service.lb_ip}")
 
             # Step 15: Monitor GitHub Action and sync ArgoCD
             logger.info("Step 15: Monitoring GitHub Action workflow...")
@@ -534,7 +526,7 @@ class GitOpsManifestController:
                             logger.warning(f"Error fetching health status: {health_err}")
 
                         # Wait 10 seconds before next poll
-                        await asyncio.sleep(10)
+                        time.sleep(10)
 
                     if health_status != "Healthy":
                         raise Exception(f"ArgoCD application is not healthy within timeout. Last status: {health_status}")
