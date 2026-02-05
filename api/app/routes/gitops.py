@@ -9,7 +9,7 @@ the 'environment' field in the request body.
 import uuid
 import json
 import asyncio
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from app.controllers.gitops_manifest_controller import gitops_manifest_controller
@@ -19,7 +19,8 @@ from app.models.gitops import (
 )
 from app.models.common import ErrorResponse
 from app.core.logging_config import logger
-from app.core.dependencies import create_argocd_service_for_env
+from app.core.dependencies import create_argocd_service_for_env, get_argocd_service
+from app.services.argocd_service import ArgoCDService
 from app.core.log_stream import request_id_ctx, log_stream_handler
 
 router = APIRouter(prefix="/gitops", tags=["GitOps Manifest Generation"])

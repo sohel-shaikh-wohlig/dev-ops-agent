@@ -33,6 +33,8 @@ import {
 } from "./services/gitops-service";
 
 
+import { ENVIRONMENTS } from "@/shared/constants/environments";
+
 export function GitOpsPage() {
   console.log("GitOpsPage mounting");
   const [isLoading, setIsLoading] = useState(false);
@@ -376,9 +378,11 @@ export function GitOpsPage() {
                         <SelectValue placeholder="Select environment" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="dev">Dev</SelectItem>
-                        <SelectItem value="uat">UAT</SelectItem>
-                        <SelectItem value="prod">Prod</SelectItem>
+                        {ENVIRONMENTS.map((env) => (
+                          <SelectItem key={env.key} value={env.key}>
+                            {env.value}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

@@ -8,7 +8,8 @@ import asyncio
 import httpx
 import time
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
+from app.services.cleanup_service import CleanupService
 from app.models.gitops import (
     GitOpsManifestRequest,
     GitOpsManifestResponse,
