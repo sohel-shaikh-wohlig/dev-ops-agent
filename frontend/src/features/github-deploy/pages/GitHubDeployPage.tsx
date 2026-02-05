@@ -17,11 +17,20 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Github, Clock, Plus, Trash2, ArrowLeft } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Github, Clock, Plus, Trash2, ArrowLeft, AlertCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
 import { ENVIRONMENTS } from "@/shared/constants/environments";
+import {
+    createGitOpsMicroserviceStream,
+    type GitOpsMicroservicePayload,
+    type CronJobPayload,
+    type LogEntry,
+} from "@/features/gitops/services/gitops-service";
+import { ConsoleOutputModal } from "@/components/shared/ConsoleOutputModal";
 
 interface FormErrors {
     environment?: string;
@@ -70,6 +79,14 @@ export default function GitHubDeployPage() {
     });
     const [cronJobs, setCronJobs] = useState<CronJob[]>([]);
 
+    // API & Logs State
+    const [isLoading, setIsLoading] = useState(false);
+    const [logs, setLogs] = useState<LogEntry[]>([]);
+    const [formMessage, setFormMessage] = useState<{
+        type: "success" | "error" | "warning";
+        message: string;
+    } | null>(null);
+
     const fullUrl = `${ENV_CONFIG.GITHUB_BASE_URL.replace(/\/+$/, "")}/${repoPath}`;
 
     const validateForm = (): boolean => {
@@ -117,12 +134,100 @@ export default function GitHubDeployPage() {
         setShowConfigPanel(false);
     };
 
-    const handleSaveConfiguration = () => {
-        // Mock save functionality
-        console.log("Saving Configuration:", {
-            ...config,
-            cronJobs,
-        });
+    const handleSaveConfiguration = async () => {
+        setIsLoading(true);
+        setLogs([]);
+        setFormMessage(null);
+
+        if (!config.envContent.trim()) {
+            setFormMessage({
+                type: "error",
+                message: "Environment Variables field is required.",
+            });
+            toast.error("Validation Error", {
+                description: "Environment Variables field is required.",
+            });
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            // Parse environment variables
+            const envVars: { name: string; value: string }[] = [];
+            if (config.envContent) {
+                config.envContent.split("\n").forEach((line) => {
+                    const trimmed = line.trim();
+                    if (trimmed) {
+                        const [name, ...rest] = trimmed.split("=");
+                        if (name && rest.length > 0) {
+                            envVars.push({ name, value: rest.join("=") });
+                        }
+                    }
+                });
+            }
+
+            // Map CronJobs
+            const cronJobsPayload: CronJobPayload[] = cronJobs.map(job => ({
+                name: job.name,
+                schedule: job.schedule,
+                suspend: job.suspend,
+                cmd: job.cmd.split(",").map(c => c.trim()).filter(Boolean)
+            }));
+
+            const payload: GitOpsMicroservicePayload = {
+                environment: config.environment,
+                microservice_name: config.microserviceName,
+                microservice_url: config.microserviceUrl,
+                container_port: config.containerPort,
+                gitops_repo_url: config.gitOpsRepoUrl,
+                git_repo_name: config.gitRepoName,
+                git_branch: config.gitBranch,
+                argocd_app_name: config.argoAppName,
+                domain_name: config.domainName,
+                env_content: config.envContent,
+                environment_variables: envVars,
+                cronjobs: cronJobsPayload.length > 0 ? cronJobsPayload : undefined,
+                worker: undefined, // Workers excluded
+            };
+
+            await createGitOpsMicroserviceStream(
+                payload,
+                (log) => {
+                    setLogs((prev) => [...prev, log]);
+                },
+                () => {
+                    setFormMessage({
+                        type: "success",
+                        message: "Your configuration has been successfully applied.",
+                    });
+                    toast.success("GitOps Configuration Saved", {
+                        description: "Your configuration has been successfully applied.",
+                    });
+                    setIsLoading(false);
+                },
+                (errorMessage) => {
+                    setFormMessage({
+                        type: "error",
+                        message: errorMessage,
+                    });
+                    setIsLoading(false);
+                    toast.error("Submission Failed", {
+                        description: errorMessage,
+                    });
+                }
+            );
+        } catch (error) {
+            console.error(error);
+            setIsLoading(false);
+            const msg = error instanceof Error ? error.message : "An unexpected error occurred";
+            setFormMessage({
+                type: "error",
+                message: msg,
+            });
+            toast.error("An unexpected error occurred", {
+                description: "Please check console for details",
+            });
+        }
     };
 
     // CronJob Handlers
@@ -143,6 +248,12 @@ export default function GitHubDeployPage() {
     if (showConfigPanel) {
         return (
             <div className="p-6 flex flex-col items-center gap-6 w-full">
+                <ConsoleOutputModal
+                    open={logs.length > 0 || isLoading}
+                    logs={logs}
+                    isLoading={isLoading}
+                    onClose={() => setLogs([])}
+                />
                 <Card className="w-full max-w-4xl">
                     <CardHeader>
                         <div className="flex items-center gap-2">
@@ -312,7 +423,7 @@ export default function GitHubDeployPage() {
 
                         {/* Editable: Environment Variables */}
                         <div className="space-y-2">
-                            <Label>Environment Variables (.env)</Label>
+                            <Label>Environment Variables (.env) <span className="text-destructive">*</span></Label>
                             <Textarea
                                 value={config.envContent}
                                 onChange={(e) => setConfig({ ...config, envContent: e.target.value })}
@@ -327,6 +438,34 @@ export default function GitHubDeployPage() {
                         <Button onClick={handleSaveConfiguration} className="w-full">
                             Save Configuration
                         </Button>
+
+                        {formMessage && (
+                            <Alert
+                                variant="default"
+                                className={`mt-4 ${formMessage.type === "success"
+                                        ? "border-green-900/50 text-green-600 dark:text-green-400 bg-green-900/10 [&>svg]:text-green-600 dark:[&>svg]:text-green-400"
+                                        : formMessage.type === "warning"
+                                            ? "border-yellow-900/50 text-yellow-600 dark:text-yellow-400 bg-yellow-900/10 [&>svg]:text-yellow-600 dark:[&>svg]:text-yellow-400"
+                                            : "border-red-900/50 text-red-600 dark:text-red-400 bg-red-900/10 [&>svg]:text-red-600 dark:[&>svg]:text-red-400"
+                                    }`}
+                            >
+                                {formMessage.type === "success" ? (
+                                    <div className="h-4 w-4 mr-2 rounded-full bg-green-500" />
+                                ) : formMessage.type === "warning" ? (
+                                    <div className="h-4 w-4 mr-2 rounded-full bg-yellow-500" />
+                                ) : (
+                                    <AlertCircle className="h-4 w-4" />
+                                )}
+                                <AlertTitle>
+                                    {formMessage.type === "success"
+                                        ? "Success"
+                                        : formMessage.type === "warning"
+                                            ? "Warning"
+                                            : "Error"}
+                                </AlertTitle>
+                                <AlertDescription>{formMessage.message}</AlertDescription>
+                            </Alert>
+                        )}
                     </CardContent>
                 </Card>
             </div>
