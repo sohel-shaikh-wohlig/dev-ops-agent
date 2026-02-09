@@ -62,7 +62,7 @@ export function ConfigMapPage() {
     defaultValues: {
       environment: "dev",
       microserviceName: "",
-      repoUrl: "https://github.com/allvest-wm/git-ops.git",
+      repoUrl: "https://github.com/tehvault/gitops.git",
       gitRepoName: "",
       argoAppName: "",
       autoSync: false,

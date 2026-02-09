@@ -362,7 +362,7 @@ class CleanupService:
                     # Extract repo info from URL
                     repo_url_parts = request.microservice_url.rstrip('/').removesuffix('.git').split('/')
                     repo_name = repo_url_parts[-1]
-                    owner = repo_url_parts[-2] if len(repo_url_parts) > 1 else "allvest-wm"
+                    owner = repo_url_parts[-2] if len(repo_url_parts) > 1 else "tehvault"
                     
                     deleted_secrets = []
                     failed_secrets = []

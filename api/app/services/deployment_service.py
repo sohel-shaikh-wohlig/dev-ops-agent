@@ -644,7 +644,7 @@ class DeploymentService:
         success, error = await asyncio.to_thread(
             git_service.create_repository_secrets,
             secrets_file=secrets_file,
-            owner="allvest-wm",
+            owner="tehvault",
             repo=repo_name
         )
 

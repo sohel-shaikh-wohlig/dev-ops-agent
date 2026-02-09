@@ -46,9 +46,9 @@ class MCPSettings(BaseSettings):
 
     # ========== Quick Deploy Defaults ==========
     # Used by quick_deploy_microservice to derive parameters
-    GITHUB_BASE_URL: str = "https://github.com/allvest-wm"
+    GITHUB_BASE_URL: str = "https://github.com/tehvault"
     GITOPS_REPO_NAME: str = "git-ops"
-    DOMAIN_SUFFIX: str = "allvestfinance.in"
+    DOMAIN_SUFFIX: str = "vaultfy.ai"
     DEFAULT_CONTAINER_PORT: int = 3000
     
     # ========== Cluster Mappings ==========

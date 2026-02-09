@@ -81,7 +81,7 @@ export function GitOpsPage() {
       microserviceName: "",
       microserviceUrl: "",
       containerPort: 3000,
-      repoUrl: "https://github.com/allvest-wm/git-ops.git",
+      repoUrl: "https://github.com/tehvault/gitops.git",
       gitRepoName: "",
       gitBranch: "dev", // Defaulting to match environment
       argoAppName: "",
@@ -384,7 +384,7 @@ export function GitOpsPage() {
                           if (!manuallyEdited.domainName) {
                             form.setFieldValue(
                               "domainName",
-                              `${msName}-${val}.allvestfinance.in`,
+                              `${msName}-${val}.vaultfy.ai`,
                             );
                           }
                         }
@@ -434,14 +434,14 @@ export function GitOpsPage() {
                         if (!manuallyEdited.domainName) {
                           form.setFieldValue(
                             "domainName",
-                            val && env ? `${val}-${env}.allvestfinance.in` : "",
+                            val && env ? `${val}-${env}.vaultfy.ai` : "",
                           );
                         }
 
                         if (!manuallyEdited.microserviceUrl) {
                           form.setFieldValue(
                             "microserviceUrl",
-                            val ? `https://github.com/allvest-wm/${val}` : "",
+                            val ? `https://github.com/tehvault/${val}` : "",
                           );
                         }
                       }}
@@ -461,7 +461,7 @@ export function GitOpsPage() {
                       /^https:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\/.*$/;
                     if (!value) return "Microservice URL is required";
                     if (!gitUrlPattern.test(value)) {
-                      return "Please enter a valid Git repository URL (e.g. https://github.com/allvest-wm/)";
+                      return "Please enter a valid Git repository URL (e.g. https://github.com/tehvault/)";
                     }
                     return undefined;
                   },
@@ -487,7 +487,7 @@ export function GitOpsPage() {
                           microserviceUrl: true,
                         }));
                       }}
-                      placeholder="https://github.com/allvest-wm/"
+                      placeholder="https://github.com/tehvault/"
                       className={
                         field.state.meta.errors.length
                           ? "border-destructive focus-visible:ring-destructive"
@@ -885,10 +885,10 @@ export function GitOpsPage() {
                 <Alert
                   variant="default"
                   className={`w-full ${formMessage.type === "success"
-                      ? "border-green-900/50 text-green-600 dark:text-green-400 bg-green-900/10 [&>svg]:text-green-600 dark:[&>svg]:text-green-400"
-                      : formMessage.type === "warning"
-                        ? "border-yellow-900/50 text-yellow-600 dark:text-yellow-400 bg-yellow-900/10 [&>svg]:text-yellow-600 dark:[&>svg]:text-yellow-400"
-                        : "border-red-900/50 text-red-600 dark:text-red-400 bg-red-900/10 [&>svg]:text-red-600 dark:[&>svg]:text-red-400"
+                    ? "border-green-900/50 text-green-600 dark:text-green-400 bg-green-900/10 [&>svg]:text-green-600 dark:[&>svg]:text-green-400"
+                    : formMessage.type === "warning"
+                      ? "border-yellow-900/50 text-yellow-600 dark:text-yellow-400 bg-yellow-900/10 [&>svg]:text-yellow-600 dark:[&>svg]:text-yellow-400"
+                      : "border-red-900/50 text-red-600 dark:text-red-400 bg-red-900/10 [&>svg]:text-red-600 dark:[&>svg]:text-red-400"
                     }`}
                 >
                   {formMessage.type === "success" ? (

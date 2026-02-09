@@ -407,9 +407,9 @@ def _extract_repo_name(github_url: str) -> str:
     Extract repository name from GitHub URL.
 
     Examples:
-        https://github.com/allvest-wm/poc-star -> poc-star
-        https://github.com/allvest-wm/poc-star.git -> poc-star
-        https://github.com/allvest-wm/user-service/ -> user-service
+        https://github.com/tehvault/poc-star -> poc-star
+        https://github.com/tehvault/poc-star.git -> poc-star
+        https://github.com/tehvault/user-service/ -> user-service
     """
     # Remove trailing slash and .git suffix
     url = github_url.rstrip("/")

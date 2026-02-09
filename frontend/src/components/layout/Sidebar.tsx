@@ -56,8 +56,8 @@ export function Sidebar() {
     <aside className="w-64 bg-card border-r border-border flex flex-col transition-colors duration-200">
       <div className="p-6 border-b border-border">
         <img
-          src="https://cdn.prod.website-files.com/67c8393507c6a7eae2efd881/6880aa06d83a6427ccf875ad_allvest%20logo%201.svg"
-          alt="Allvest Logo"
+          src="https://cdn.prod.website-files.com/67c8393507c6a7eae2efd881/6880aa06d83a6427ccf875ad_vaultfy%20logo%201.svg"
+          alt="vaultfy Logo"
           className="h-8 w-auto"
         />
       </div>

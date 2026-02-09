@@ -4,11 +4,11 @@ annotations:
 labels:
   application: {{MICRO_SERVICE_NAME}}
   bu: {{MICRO_SERVICE_NAME}}
-  env: allvest-{{ENVIRONMENT}}
+  env: vaultfy-{{ENVIRONMENT}}
 replicasCount: 1
 containerPort: {{CONTAINER_PORT}}
 image:
-  name: asia-south1-docker.pkg.dev/project-avs-ops/prj-avs-gar-staging/{{MICRO_SERVICE_NAME}}
+  name: europe-west3-docker.pkg.dev/prj-vaultfy-ops/gar-dev/{{MICRO_SERVICE_NAME}}
   tag: dev-58fhhdcbsjh
   pullPolicy: Always
 cronjobCount: {{CRONJOBS_COUNT}}

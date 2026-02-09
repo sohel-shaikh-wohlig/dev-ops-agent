@@ -119,11 +119,11 @@ export default function GitHubDeployPage() {
             microserviceName: microserviceName,
             microserviceUrl: fullUrl,
             containerPort: 3000,
-            gitOpsRepoUrl: `${ENV_CONFIG.GITHUB_BASE_URL.replace(/\/+$/, "")}/git-ops.git`,
+            gitOpsRepoUrl: `${ENV_CONFIG.GITHUB_BASE_URL.replace(/\/+$/, "")}/gitops.git`,
             gitRepoName: microserviceName,
             gitBranch: gitBranch,
             argoAppName: `${microserviceName}-${selectedEnv}`,
-            domainName: `${microserviceName}-${selectedEnv}.allvestfinance.in`,
+            domainName: `${microserviceName}-${selectedEnv}.vaultfy.ai`,
             envContent: "",
         });
 
@@ -443,10 +443,10 @@ export default function GitHubDeployPage() {
                             <Alert
                                 variant="default"
                                 className={`mt-4 ${formMessage.type === "success"
-                                        ? "border-green-900/50 text-green-600 dark:text-green-400 bg-green-900/10 [&>svg]:text-green-600 dark:[&>svg]:text-green-400"
-                                        : formMessage.type === "warning"
-                                            ? "border-yellow-900/50 text-yellow-600 dark:text-yellow-400 bg-yellow-900/10 [&>svg]:text-yellow-600 dark:[&>svg]:text-yellow-400"
-                                            : "border-red-900/50 text-red-600 dark:text-red-400 bg-red-900/10 [&>svg]:text-red-600 dark:[&>svg]:text-red-400"
+                                    ? "border-green-900/50 text-green-600 dark:text-green-400 bg-green-900/10 [&>svg]:text-green-600 dark:[&>svg]:text-green-400"
+                                    : formMessage.type === "warning"
+                                        ? "border-yellow-900/50 text-yellow-600 dark:text-yellow-400 bg-yellow-900/10 [&>svg]:text-yellow-600 dark:[&>svg]:text-yellow-400"
+                                        : "border-red-900/50 text-red-600 dark:text-red-400 bg-red-900/10 [&>svg]:text-red-600 dark:[&>svg]:text-red-400"
                                     }`}
                             >
                                 {formMessage.type === "success" ? (

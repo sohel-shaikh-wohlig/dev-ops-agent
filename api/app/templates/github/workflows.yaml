@@ -1,9 +1,9 @@
-name: {{MICRO_SERVICE_NAME}}
+name: { { MICRO_SERVICE_NAME } }
 
 on:
   push:
     branches:
-      - {{ENVIRONMENT}}
+      - { { ENVIRONMENT } }
 
 permissions:
   id-token: write
@@ -14,50 +14,50 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-    
-    - name: Get commit SHA of target branch
-      id: get_sha
-      run: |
-        SHA=$(git rev-parse HEAD)
-        echo "commit_sha=$SHA" >> $GITHUB_OUTPUT
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set env for branch + sha
-      run: |
-        BRANCH_NAME=${GITHUB_REF#refs/heads/}
-        echo "GITHUB_BRANCH=${BRANCH_NAME}-${{ steps.get_sha.outputs.commit_sha }}" >> $GITHUB_ENV
-      
-    - id: 'auth'
-      name: 'Obtain access token by using workload identity federation'
-      uses: 'google-github-actions/auth@v2'
-      with:
-        create_credentials_file: true
-        token_format: access_token
-        workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ secrets.SERVICE_ACCOUNT }}
+      - name: Get commit SHA of target branch
+        id: get_sha
+        run: |
+          SHA=$(git rev-parse HEAD)
+          echo "commit_sha=$SHA" >> $GITHUB_OUTPUT
 
-    - name: Connect to Artifact Registry
-      run: |-
-        echo ${{ steps.auth.outputs.access_token }} | docker login -u oauth2accesstoken --password-stdin ${{ secrets.GAR_HOST }}
+      - name: Set env for branch + sha
+        run: |
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          echo "GITHUB_BRANCH=${BRANCH_NAME}-${{ steps.get_sha.outputs.commit_sha }}" >> $GITHUB_ENV
 
-    - name: Build Docker Image
-      run: |
-        docker build -t ${{ secrets.GAR_HOST }}/${{ secrets.PROJECT_ID }}/${{ secrets.GAR_REPO_STAGING }}/${{ secrets.IMAGES_FOLDER }}:${{ env.GITHUB_BRANCH }} .
+      - id: "auth"
+        name: "Obtain access token by using workload identity federation"
+        uses: "google-github-actions/auth@v2"
+        with:
+          create_credentials_file: true
+          token_format: access_token
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT }}
 
-    - name: Push Docker Image to Artifact Registry
-      run: |
-        docker push ${{ secrets.GAR_HOST }}/${{ secrets.PROJECT_ID }}/${{ secrets.GAR_REPO_STAGING }}/${{ secrets.IMAGES_FOLDER }}:${{ env.GITHUB_BRANCH }}
-    
-    - name: Update GitHub
-      run: |
-        git clone https://${{ secrets.GH_TOKEN }}@github.com/allvest-wm/git-ops
-        cd git-ops
-        git checkout dev
-        git config user.name ${{ secrets.GH_NAME }}
-        git config user.email ${{ secrets.GH_EMAIL }}
-        yq e '.image.name = "'${{ secrets.GAR_HOST }}/${{ secrets.PROJECT_ID }}/${{ secrets.GAR_REPO_STAGING }}/${{ secrets.IMAGES_FOLDER }}'"' -i {{MICRO_SERVICE_NAME}}/values.yaml
-        yq e '.image.tag = "'${{ env.GITHUB_BRANCH }}'"' -i {{MICRO_SERVICE_NAME}}/values.yaml
-        git add .
-        git commit --allow-empty -m "Update {{MICRO_SERVICE_NAME}} image -> ${{ env.GITHUB_BRANCH }}"
-        git push --set-upstream origin dev
+      - name: Connect to Artifact Registry
+        run: |-
+          echo ${{ steps.auth.outputs.access_token }} | docker login -u oauth2accesstoken --password-stdin ${{ secrets.GAR_HOST }}
+
+      - name: Build Docker Image
+        run: |
+          docker build -t ${{ secrets.GAR_HOST }}/${{ secrets.PROJECT_ID }}/${{ secrets.GAR_REPO_DEV }}/${{ secrets.IMAGES_FOLDER }}:${{ env.GITHUB_BRANCH }} .
+
+      - name: Push Docker Image to Artifact Registry
+        run: |
+          docker push ${{ secrets.GAR_HOST }}/${{ secrets.PROJECT_ID }}/${{ secrets.GAR_REPO_DEV }}/${{ secrets.IMAGES_FOLDER }}:${{ env.GITHUB_BRANCH }}
+
+      - name: Update GitHub
+        run: |
+          git clone https://${{ secrets.GH_TOKEN }}@github.com/tehvault/git-ops
+          cd git-ops
+          git checkout dev
+          git config user.name ${{ secrets.GH_NAME }}
+          git config user.email ${{ secrets.GH_EMAIL }}
+          yq e '.image.name = "'${{ secrets.GAR_HOST }}/${{ secrets.PROJECT_ID }}/${{ secrets.GAR_REPO_DEV }}/${{ secrets.IMAGES_FOLDER }}'"' -i {{MICRO_SERVICE_NAME}}/values.yaml
+          yq e '.image.tag = "'${{ env.GITHUB_BRANCH }}'"' -i {{MICRO_SERVICE_NAME}}/values.yaml
+          git add .
+          git commit --allow-empty -m "Update {{MICRO_SERVICE_NAME}} image -> ${{ env.GITHUB_BRANCH }}"
+          git push --set-upstream origin dev

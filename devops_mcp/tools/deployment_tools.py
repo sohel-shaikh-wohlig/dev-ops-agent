@@ -65,7 +65,7 @@ def get_deployment_tools() -> list[Tool]:
                     },
                     "gitops_repo_url": {
                         "type": "string",
-                        "description": "GitOps repository URL for Kubernetes manifests (e.g., https://github.com/allvest-wm/git-ops.git)"
+                        "description": "GitOps repository URL for Kubernetes manifests (e.g., https://github.com/tehvault/gitops.git)"
                     },
                     "git_repo_name": {
                         "type": "string",
@@ -313,7 +313,7 @@ def get_deployment_tools() -> list[Tool]:
             - gitops_repo_url: Standard GitOps repository
             - git_branch: Same as environment
             - argocd_app_name: {microservice_name}-{environment}
-            - domain_name: {microservice_name}-{environment}.allvestfinance.in
+            - domain_name: {microservice_name}-{environment}.vaultfy.ai
             - container_port: 3000 (default, can be overridden)
 
             This tool delegates to deploy_microservice internally, providing the same
@@ -332,7 +332,7 @@ def get_deployment_tools() -> list[Tool]:
                     },
                     "microservice_github_url": {
                         "type": "string",
-                        "description": "GitHub repository URL for the microservice (e.g., https://github.com/allvest-wm/user-service)"
+                        "description": "GitHub repository URL for the microservice (e.g., https://github.com/tehvault/user-service)"
                     },
                     "container_port": {
                         "type": "integer",
