@@ -301,5 +301,52 @@ def get_deployment_tools() -> list[Tool]:
                 },
                 "required": ["argocd_app_name", "revision"]
             }
+        ),
+
+        Tool(
+            name="quick_deploy_microservice",
+            description="""
+            Simplified deployment tool that requires only environment and GitHub URL.
+
+            All other deployment parameters are automatically derived:
+            - microservice_name: Extracted from GitHub URL
+            - gitops_repo_url: Standard GitOps repository
+            - git_branch: Same as environment
+            - argocd_app_name: {microservice_name}-{environment}
+            - domain_name: {microservice_name}-{environment}.allvestfinance.in
+            - container_port: 3000 (default, can be overridden)
+
+            This tool delegates to deploy_microservice internally, providing the same
+            full deployment orchestration (manifests, GitOps, GitHub workflows, DNS, ArgoCD).
+
+            Use this for standard deployments following organizational conventions.
+            Use deploy_microservice directly when custom configuration is needed.
+            """,
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "environment": {
+                        "type": "string",
+                        "enum": ["dev", "staging", "production", "qa", "uat"],
+                        "description": "Target deployment environment"
+                    },
+                    "microservice_github_url": {
+                        "type": "string",
+                        "description": "GitHub repository URL for the microservice (e.g., https://github.com/allvest-wm/user-service)"
+                    },
+                    "container_port": {
+                        "type": "integer",
+                        "description": "Container port number (optional, defaults to 3000)",
+                        "minimum": 1,
+                        "maximum": 65535,
+                        "default": 3000
+                    },
+                    "env_content": {
+                        "type": "string",
+                        "description": "Environment variables in .env format (optional, KEY=VALUE pairs, one per line)"
+                    }
+                },
+                "required": ["environment", "microservice_github_url"]
+            }
         )
     ]

@@ -198,11 +198,11 @@ class GitOpsManifestRequest(BaseModel):
         example="api.example.com"
     )
 
-    env_content: Optional[str] = Field(
-        default=None,
+    env_content: str = Field(
+        ...,
         alias="envContent",
         description="Content of .env file with KEY=VALUE pairs (one per line). "
-                    "Same format as /configmap/update endpoint.",
+                    "Same format as /configmap/update endpoint. Required for environment variable validation.",
         example="LOG_LEVEL=debug\nNODE_ENV=development\nDATABASE_URL=postgresql://localhost:5432/db"
     )
 
@@ -266,13 +266,16 @@ class GitOpsManifestRequest(BaseModel):
     def validate_env_content(cls, v):
         """Validate environment content format (same as ConfigMap)"""
         if v is None or not v.strip():
-            return None
+            raise ValueError(
+                "env_content is required and cannot be empty. "
+                "Please provide environment variables in KEY=VALUE format."
+            )
 
         # Check that at least one KEY=VALUE pair exists
         lines = [line.strip() for line in v.strip().split('\n')]
         valid_lines = [line for line in lines if line and not line.startswith('#') and '=' in line]
 
-        if v.strip() and not valid_lines:
+        if not valid_lines:
             raise ValueError(
                 "Environment content must contain at least one valid KEY=VALUE pair. "
                 "Lines should be in format: KEY=VALUE"

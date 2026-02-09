@@ -48,6 +48,56 @@ Deploy data-processor to dev with a daily sync cronjob.
 - Cronjob: name=data-sync, schedule="0 2 * * *", command=["npm", "run", "sync"]
 ```
 
+## quick_deploy_microservice
+
+Simplified deployment requiring only environment and GitHub URL. All other parameters are automatically derived.
+
+### Basic Quick Deploy
+
+```
+Quick deploy poc-star to dev.
+- GitHub URL: https://github.com/allvest-wm/poc-star
+```
+
+### Quick Deploy to Staging
+
+```
+Deploy user-service to staging environment.
+- GitHub URL: https://github.com/allvest-wm/user-service
+```
+
+### Quick Deploy with Custom Port
+
+```
+Quick deploy api-gateway to dev with container port 8080.
+- GitHub URL: https://github.com/allvest-wm/api-gateway
+```
+
+### Quick Deploy with Environment Variables
+
+```
+Deploy payment-service to uat.
+- GitHub URL: https://github.com/allvest-wm/payment-service
+- Env vars:
+  NODE_ENV=uat
+  API_KEY=xxx
+  LOG_LEVEL=debug
+```
+
+### Natural Language Examples
+
+```
+Deploy https://github.com/allvest-wm/notification-service to dev
+```
+
+```
+I need to deploy the auth-service repo to staging
+```
+
+```
+Set up notification-service in the qa environment from https://github.com/allvest-wm/notification-service
+```
+
 ## cleanup_deployment
 
 ### Basic Cleanup

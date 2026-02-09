@@ -24,75 +24,81 @@
 }
 
 :root {
-  /* Light Theme - Metronic Style (HSL) */
-  --background: 210 20% 98%; /* #f9fafb */
-  --foreground: 215 28% 17%; /* #1f2937 */
-  
-  --card: 0 0% 100%; /* #ffffff */
-  --card-foreground: 215 28% 17%; /* #1f2937 */
- 
-  --popover: 0 0% 100%; /* #ffffff */
-  --popover-foreground: 215 28% 17%; /* #1f2937 - Assuming same as card foreground */
- 
-  --primary: 219 100% 58%; /* #2a75ff */
-  --primary-foreground: 0 0% 100%; /* #ffffff */
- 
-  --secondary: 220 13% 96%; /* #f3f4f6 */
-  --secondary-foreground: 215 28% 17%; /* #1f2937 */
- 
-  --muted: 220 13% 96%; /* #f3f4f6 */
-  --muted-foreground: 220 9% 46%; /* #6b7280 */
- 
-  --accent: 214 100% 97%; /* #eff6ff */
-  --accent-foreground: 219 100% 58%; /* #2a75ff */
- 
-  --destructive: 0 72% 51%; /* #dc2626 */
-  --destructive-foreground: 0 0% 100%; /* #ffffff */
+  /* Enforce Dark Theme Globally */
+  /* Using comma-separated HSL for maximum compatibility */
+  --background: 0, 0%, 0%;
+  --foreground: 0, 0%, 100%;
 
-  --border: 220 13% 91%; /* #e5e7eb */
-  --input: 210 20% 98%; /* #f9fafb */
-  --ring: 219 100% 58%; /* #2a75ff */
+  --card: 222, 47%, 11%;
+  --card-foreground: 0, 0%, 100%;
+
+  --popover: 222, 47%, 11%;
+  --popover-foreground: 0, 0%, 100%;
+
+  /* Emerald Green - Calmer, Professional */
+  --primary: 160, 84%, 39%;
+  --primary-foreground: 0, 0%, 100%;
+
+  --secondary: 217, 33%, 17%;
+  --secondary-foreground: 0, 0%, 100%;
+
+  --muted: 217, 33%, 17%;
+  --muted-foreground: 215, 20%, 65%;
+
+  --accent: 217, 33%, 17%;
+  --accent-foreground: 0, 0%, 100%;
+
+  --destructive: 0, 62%, 30%;
+  --destructive-foreground: 0, 0%, 100%;
+
+  --border: 217, 33%, 20%;
+  --input: 217, 33%, 20%;
+  --ring: 160, 84%, 39%;
+  /* Emerald ring */
 
   --radius: 0.75rem;
 }
 
+/* Force .light class to use dark theme colors as well */
+.light,
 .dark {
-  /* Dark Theme */
-  --background: 222 47% 11%;
-  --foreground: 210 40% 98%;
- 
-  --card: 222 47% 11%; /* Slightly lighter than bg or same for cleaner look */
-  --card-foreground: 210 40% 98%;
- 
-  --popover: 222 47% 11%;
-  --popover-foreground: 210 40% 98%;
- 
-  --primary: 217 91% 60%;
-  --primary-foreground: 222 47% 11%;
- 
-  --secondary: 217 33% 17%;
-  --secondary-foreground: 210 40% 98%;
- 
-  --muted: 217 33% 17%;
-  --muted-foreground: 215 20% 65%;
- 
-  --accent: 217 33% 17%;
-  --accent-foreground: 210 40% 98%;
- 
-  --destructive: 0 63% 31%;
-  --destructive-foreground: 210 40% 98%;
- 
-  --border: 217 33% 17%;
-  --input: 217 33% 17%;
-  --ring: 224 76% 48%;
+  --background: 0, 0%, 0%;
+  --foreground: 0, 0%, 100%;
+
+  --card: 222, 47%, 11%;
+  --card-foreground: 0, 0%, 100%;
+
+  --popover: 222, 47%, 11%;
+  --popover-foreground: 0, 0%, 100%;
+
+  --primary: 160, 84%, 39%;
+  --primary-foreground: 0, 0%, 100%;
+
+  --secondary: 217, 33%, 17%;
+  --secondary-foreground: 0, 0%, 100%;
+
+  --muted: 217, 33%, 17%;
+  --muted-foreground: 215, 20%, 65%;
+
+  --accent: 217, 33%, 17%;
+  --accent-foreground: 0, 0%, 100%;
+
+  --destructive: 0, 62%, 30%;
+  --destructive-foreground: 0, 0%, 100%;
+
+  --border: 217, 33%, 20%;
+  --input: 217, 33%, 20%;
+  --ring: 160, 84%, 39%;
 }
 
 * {
-  border-color: var(--color-border);
+  border-color: hsl(var(--border));
 }
 
 body {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-image: radial-gradient(circle at 50% 0%, rgba(58, 64, 99, 0.4) 0%, rgba(0, 0, 0, 0) 50%);
+  min-height: 100vh;
 }

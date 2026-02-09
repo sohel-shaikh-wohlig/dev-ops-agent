@@ -43,6 +43,13 @@ class MCPSettings(BaseSettings):
     ENABLE_DRY_RUN: bool = True
     ENABLE_ROLLBACK: bool = True
     REQUIRE_APPROVAL_PRODUCTION: bool = True  # Require confirmation for prod
+
+    # ========== Quick Deploy Defaults ==========
+    # Used by quick_deploy_microservice to derive parameters
+    GITHUB_BASE_URL: str = "https://github.com/allvest-wm"
+    GITOPS_REPO_NAME: str = "git-ops"
+    DOMAIN_SUFFIX: str = "allvestfinance.in"
+    DEFAULT_CONTAINER_PORT: int = 3000
     
     # ========== Cluster Mappings ==========
     # Override these with environment variables if needed
