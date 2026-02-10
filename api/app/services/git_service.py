@@ -19,6 +19,34 @@ class GitUtilitiesService:
     """
     
     @staticmethod
+    def _build_clone_url(git_url: str) -> str:
+        """
+        Build the clone URL based on the URL format.
+        - SSH URLs (git@github.com:...) are used as-is
+        - HTTPS URLs get the GITHUB_TOKEN injected for authentication
+
+        Args:
+            git_url: Original Git repository URL
+
+        Returns:
+            Clone-ready URL
+        """
+        if git_url.startswith("git@"):
+            logger.info("Detected SSH URL, cloning via SSH")
+            return git_url
+
+        if git_url.startswith("https://"):
+            settings = get_settings()
+            token = settings.GITHUB_TOKEN
+            if token and token != "GITHUB_TOKEN":
+                authenticated_url = git_url.replace("https://", f"https://{token}@")
+                logger.info("Detected HTTPS URL, cloning with token authentication")
+                return authenticated_url
+            logger.info("Detected HTTPS URL, cloning without token (no valid GITHUB_TOKEN configured)")
+
+        return git_url
+
+    @staticmethod
     def clone_repository(
         git_url: str,
         target_dir: Path,
@@ -26,14 +54,14 @@ class GitUtilitiesService:
         depth: int = 1
     ) -> Tuple[bool, Optional[str]]:
         """
-        Clone a Git repository
-        
+        Clone a Git repository (supports both HTTPS and SSH URLs)
+
         Args:
-            git_url: Git repository URL
+            git_url: Git repository URL (HTTPS or SSH)
             target_dir: Target directory for clone
             branch: Branch to clone (default: main)
             depth: Clone depth (default: 1 for shallow clone)
-            
+
         Returns:
             Tuple of (success, error_message)
         """
@@ -42,38 +70,39 @@ class GitUtilitiesService:
             if target_dir.exists():
                 logger.info(f"Removing existing directory: {target_dir}")
                 shutil.rmtree(target_dir)
-            
+
             # Create parent directory
             target_dir.parent.mkdir(parents=True, exist_ok=True)
-            
+
+            clone_url = GitUtilitiesService._build_clone_url(git_url)
             logger.info(f"Cloning repository: {git_url} to {target_dir}")
-            
+
             # Try to clone with specific branch
             result = subprocess.run(
-                ['git', 'clone', '--branch', branch, '--depth', str(depth), git_url, str(target_dir)],
+                ['git', 'clone', '--branch', branch, '--depth', str(depth), clone_url, str(target_dir)],
                 capture_output=True,
                 text=True,
                 timeout=300  # 5 minutes timeout
             )
-            
+
             if result.returncode != 0:
                 # Try without branch specification (might not exist)
                 logger.warning(f"Branch {branch} not found, trying default branch")
                 result = subprocess.run(
-                    ['git', 'clone', '--depth', str(depth), git_url, str(target_dir)],
+                    ['git', 'clone', '--depth', str(depth), clone_url, str(target_dir)],
                     capture_output=True,
                     text=True,
                     timeout=300
                 )
-                
+
                 if result.returncode != 0:
                     error_msg = result.stderr or "Unknown error during clone"
                     logger.error(f"Git clone failed: {error_msg}")
                     return False, error_msg
-            
+
             logger.info(f"Repository cloned successfully to {target_dir}")
             return True, None
-            
+
         except subprocess.TimeoutExpired:
             error_msg = "Git clone operation timed out (5 minutes)"
             logger.error(error_msg)

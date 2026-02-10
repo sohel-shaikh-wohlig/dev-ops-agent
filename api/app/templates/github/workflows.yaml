@@ -1,9 +1,10 @@
-name: { { MICRO_SERVICE_NAME } }
+# prettier-ignore
+name: {{MICRO_SERVICE_NAME}}
 
 on:
   push:
     branches:
-      - { { ENVIRONMENT } }
+      - {{ENVIRONMENT}}
 
 permissions:
   id-token: write
@@ -51,8 +52,8 @@ jobs:
 
       - name: Update GitHub
         run: |
-          git clone https://${{ secrets.GH_TOKEN }}@github.com/tehvault/git-ops
-          cd git-ops
+          git clone https://${{ secrets.GH_TOKEN }}@github.com/tehvault/gitops
+          cd gitops
           git checkout dev
           git config user.name ${{ secrets.GH_NAME }}
           git config user.email ${{ secrets.GH_EMAIL }}

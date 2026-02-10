@@ -119,7 +119,8 @@ export default function GitHubDeployPage() {
             microserviceName: microserviceName,
             microserviceUrl: fullUrl,
             containerPort: 3000,
-            gitOpsRepoUrl: `${ENV_CONFIG.GITHUB_BASE_URL.replace(/\/+$/, "")}/gitops.git`,
+            // gitOpsRepoUrl: `${ENV_CONFIG.GITHUB_BASE_URL.replace(/\/+$/, "")}/gitops.git`,
+            gitOpsRepoUrl: '',
             gitRepoName: microserviceName,
             gitBranch: gitBranch,
             argoAppName: `${microserviceName}-${selectedEnv}`,
@@ -313,7 +314,10 @@ export default function GitHubDeployPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>GitOps Repo URL</Label>
-                                <Input value={config.gitOpsRepoUrl} disabled />
+                                <Input
+                                    value={config.gitOpsRepoUrl}
+                                    onChange={(e) => setConfig({ ...config, gitOpsRepoUrl: e.target.value })}
+                                />
                             </div>
                             <div className="space-y-2">
                                 <Label>Git Repo Name</Label>
