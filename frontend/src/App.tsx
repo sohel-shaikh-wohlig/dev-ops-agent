@@ -7,6 +7,7 @@ import { ArgoCDPage } from "@/features/argocd";
 import { ConfigMapPage } from "@/features/configmap";
 import { GitOpsPage } from "@/features/gitops";
 import { GitHubDeployPage } from "@/features/github-deploy";
+import { TerraformPage } from "@/features/terraform/pages/TerraformPage";
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/argocd" element={<ArgoCDPage />} />
               <Route path="/configmap" element={<ConfigMapPage />} />
+              <Route path="/terraform" element={<TerraformPage />} />
               <Route path="/deploy/github" element={<GitHubDeployPage />} />
               <Route path="/deploy/variables" element={<GitOpsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

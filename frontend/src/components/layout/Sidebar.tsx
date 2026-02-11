@@ -9,6 +9,7 @@ import {
   Sliders,
   ChevronDown,
   ChevronRight,
+  Cloud,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ const navItems: NavItem[] = [
   { name: "Dashboard", icon: PieChart, href: "/" },
   { name: "ArgoCD", icon: Server, href: "/argocd" },
   { name: "ConfigMap", icon: FileIcon, href: "/configmap" },
+  { name: "Terraform", icon: Cloud, href: "/terraform" },
   {
     name: "Deploy",
     icon: Rocket,
