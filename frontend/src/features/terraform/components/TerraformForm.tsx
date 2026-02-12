@@ -23,10 +23,12 @@ import { toast } from "sonner";
 
 import { ENVIRONMENTS } from "@/shared/constants/environments";
 import { CLIENTS, RESOURCE_TYPES } from "@/shared/constants/terraform";
+import { provisionTerraform } from "../services/terraform-service";
 
 interface TerraformConfig {
     client: string;
     environment: string;
+    terraformRepoUrl: string;
     resourceType: string;
     bucketName: string;
     isPublic: boolean;
@@ -36,57 +38,112 @@ export function TerraformForm() {
     const [config, setConfig] = useState<TerraformConfig>({
         client: "",
         environment: "",
+        terraformRepoUrl: "",
         resourceType: "",
         bucketName: "",
         isPublic: false,
     });
 
+    const [isLoading, setIsLoading] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
     const [formMessage, setFormMessage] = useState<{
         type: "success" | "error";
         message: string;
     } | null>(null);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setFormMessage(null);
+        const newErrors: Record<string, string> = {};
 
-        // Basic validation
-        if (!config.client || !config.environment || !config.resourceType) {
-            setFormMessage({
-                type: "error",
-                message: "Please fill in all required fields",
-            });
-            return;
+        // Validation
+        if (!config.client) {
+            newErrors.client = "Client is required";
+        }
+
+        if (!config.environment) {
+            newErrors.environment = "Environment is required";
+        }
+
+        if (!config.resourceType) {
+            newErrors.resourceType = "Resource type is required";
+        }
+
+        if (!config.terraformRepoUrl) {
+            newErrors.terraformRepoUrl = "Terraform Git Repo URL is required";
+        } else if (!/^https:\/\/|^git@github\.com/.test(config.terraformRepoUrl)) {
+            newErrors.terraformRepoUrl = "Enter a valid Git repository URL (https:// or git@github.com)";
         }
 
         if (config.resourceType === "s3_bucket" && !config.bucketName) {
-            setFormMessage({
-                type: "error",
-                message: "Bucket name is required",
-            });
+            newErrors.bucketName = "Bucket name is required";
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
             return;
         }
 
-        console.log("Submitting Terraform config:", config);
+        // Clear errors if valid
+        setErrors({});
+        setIsLoading(true);
 
-        setFormMessage({
-            type: "success",
-            message: "Terraform configuration submitted successfully",
-        });
-        toast.success("Configuration Submitted", {
-            description: "Your Terraform resource request has been processed.",
-        });
+        try {
+            const payload = {
+                client_name: config.client,
+                environment: config.environment,
+                terraform_repo_url: config.terraformRepoUrl,
+                resource_type: config.resourceType,
+                resource_config: config.resourceType === "s3_bucket" ? {
+                    bucket_name: config.bucketName,
+                    is_public: config.isPublic,
+                } : {},
+            };
+
+            await provisionTerraform(payload);
+
+            setFormMessage({
+                type: "success",
+                message: "Terraform configuration submitted successfully",
+            });
+            toast.success("Configuration Submitted", {
+                description: "Your Terraform resource request has been processed.",
+            });
+
+            // Optional: Reset form after success? The requirement says "Clear messages when switching resource types", 
+            // but for submit it says "Reset form state" ONLY for Cancel. 
+            // However, usually successful submission implies some feedback. 
+            // Requirement 4 says Submit -> Show success or error message. 
+            // I will keep the state to allow user to see what they submitted or submit another similar one, 
+            // unless strictly required to reset. 
+            // Re-reading: "Cancel: Reset form state". "Submit: ... Show success or error message".
+            // So I won't reset on success.
+
+        } catch (error: any) {
+            console.error(error);
+            setFormMessage({
+                type: "error",
+                message: error.message || "An error occurred during provisioning",
+            });
+            toast.error("Submission Failed", {
+                description: error.message || "An error occurred during provisioning",
+            });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleCancel = () => {
         setConfig({
             client: "",
             environment: "",
+            terraformRepoUrl: "",
             resourceType: "",
             bucketName: "",
             isPublic: false,
         });
         setFormMessage(null);
+        setErrors({});
     };
 
     return (
@@ -111,9 +168,12 @@ export function TerraformForm() {
                             <Label htmlFor="client">Client</Label>
                             <Select
                                 value={config.client}
-                                onValueChange={(val) => setConfig({ ...config, client: val })}
+                                onValueChange={(val) => {
+                                    setConfig({ ...config, client: val });
+                                    if (errors.client) setErrors({ ...errors, client: "" });
+                                }}
                             >
-                                <SelectTrigger id="client">
+                                <SelectTrigger id="client" className={errors.client ? "border-destructive" : ""}>
                                     <SelectValue placeholder="Select client" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -124,15 +184,21 @@ export function TerraformForm() {
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {errors.client && (
+                                <p className="text-sm text-destructive">{errors.client}</p>
+                            )}
                         </div>
 
                         <div className="space-y-2">
                             <Label htmlFor="environment">Environment</Label>
                             <Select
                                 value={config.environment}
-                                onValueChange={(val) => setConfig({ ...config, environment: val })}
+                                onValueChange={(val) => {
+                                    setConfig({ ...config, environment: val });
+                                    if (errors.environment) setErrors({ ...errors, environment: "" });
+                                }}
                             >
-                                <SelectTrigger id="environment">
+                                <SelectTrigger id="environment" className={errors.environment ? "border-destructive" : ""}>
                                     <SelectValue placeholder="Select environment" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -143,6 +209,9 @@ export function TerraformForm() {
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {errors.environment && (
+                                <p className="text-sm text-destructive">{errors.environment}</p>
+                            )}
                         </div>
                     </div>
 
@@ -159,9 +228,14 @@ export function TerraformForm() {
                                         isPublic: false,
                                     });
                                     setFormMessage(null);
+                                    if (errors.resourceType) {
+                                        const newErrors: Record<string, string> = { ...errors, resourceType: "" };
+                                        delete newErrors.bucketName; // Clear bucket error if switching type
+                                        setErrors(newErrors);
+                                    }
                                 }}
                             >
-                                <SelectTrigger id="resourceType">
+                                <SelectTrigger id="resourceType" className={errors.resourceType ? "border-destructive" : ""}>
                                     <SelectValue placeholder="Select resource type" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -172,6 +246,26 @@ export function TerraformForm() {
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {errors.resourceType && (
+                                <p className="text-sm text-destructive">{errors.resourceType}</p>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="terraformRepoUrl">Terraform Git Repo URL</Label>
+                            <Input
+                                id="terraformRepoUrl"
+                                value={config.terraformRepoUrl}
+                                onChange={(e) => {
+                                    setConfig({ ...config, terraformRepoUrl: e.target.value });
+                                    if (errors.terraformRepoUrl) setErrors({ ...errors, terraformRepoUrl: "" });
+                                }}
+                                placeholder="https://github.com/org/repo.git or git@github.com:org/repo.git"
+                                className={errors.terraformRepoUrl ? "border-destructive" : ""}
+                            />
+                            {errors.terraformRepoUrl && (
+                                <p className="text-sm text-destructive">{errors.terraformRepoUrl}</p>
+                            )}
                         </div>
                     </div>
 
@@ -186,9 +280,16 @@ export function TerraformForm() {
                                 <Input
                                     id="bucketName"
                                     value={config.bucketName}
-                                    onChange={(e) => setConfig({ ...config, bucketName: e.target.value })}
+                                    onChange={(e) => {
+                                        setConfig({ ...config, bucketName: e.target.value });
+                                        if (errors.bucketName) setErrors({ ...errors, bucketName: "" });
+                                    }}
                                     placeholder="e.g. my-app-assets"
+                                    className={errors.bucketName ? "border-destructive" : ""}
                                 />
+                                {errors.bucketName && (
+                                    <p className="text-sm text-destructive">{errors.bucketName}</p>
+                                )}
                             </div>
 
                             <div className="flex items-center justify-between p-3 border rounded-md bg-background">
@@ -232,7 +333,9 @@ export function TerraformForm() {
                         <Button type="button" variant="outline" onClick={handleCancel}>
                             Cancel
                         </Button>
-                        <Button type="submit">Submit Configuration</Button>
+                        <Button type="submit" disabled={isLoading}>
+                            {isLoading ? "Submitting..." : "Submit Configuration"}
+                        </Button>
                     </div>
                 </form>
             </CardContent>

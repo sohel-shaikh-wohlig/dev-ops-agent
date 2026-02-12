@@ -1,5 +1,5 @@
 export const CLIENTS = [
-  { key: "client-a", value: "Client A" },
+  { key: "vaultfy", value: "Vaultfy" },
   { key: "client-b", value: "Client B" },
   { key: "client-c", value: "Client C" },
 ] as const;
