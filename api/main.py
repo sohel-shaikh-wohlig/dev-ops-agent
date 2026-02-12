@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.logging_config import setup_logging
 from app.routes import argocd, routes, configmap, gitops, terraform
 from app.routes.configmap import gitops_router
+from app.routes.github_webhook import github_router, terraform_pr_router
 from app.utils.cleanup import cleanup_old_sessions
 
 
@@ -97,6 +98,8 @@ app.include_router(configmap.router, prefix="/api")
 app.include_router(gitops.router, prefix="/api")
 app.include_router(gitops_router, prefix="/api")
 app.include_router(terraform.router, prefix="/api")
+app.include_router(github_router, prefix="/api")
+app.include_router(terraform_pr_router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_event():

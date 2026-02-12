@@ -98,6 +98,7 @@ class Settings(BaseSettings):
     GIT_USER_NAME: str = Field("DevOps Automation", description="Git author name for commits")
     GIT_USER_EMAIL: str = Field("devops@automation.local", description="Git author email for commits")
     GITHUB_TOKEN: str = Field("GITHUB_TOKEN", description="GitHub secret token")
+    GITHUB_WEBHOOK_SECRET: str = Field("", description="Secret for validating GitHub webhook signatures")
     GITOPS_REPO_URL: Optional[str] = Field(None, description="GitOps repository URL for fetching values")
 
     # Preview Session Configuration

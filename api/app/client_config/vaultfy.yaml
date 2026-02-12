@@ -12,3 +12,5 @@ argocd:
   prod:
     server: "https://argocd-prod.vaultfy.ai"
     username: "admin"
+github:
+  webhook_secret: ""
