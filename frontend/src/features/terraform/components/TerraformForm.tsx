@@ -75,7 +75,7 @@ export function TerraformForm() {
             newErrors.terraformRepoUrl = "Enter a valid Git repository URL (https:// or git@github.com)";
         }
 
-        if (config.resourceType === "s3_bucket" && !config.bucketName) {
+        if (config.resourceType === "gcs" && !config.bucketName) {
             newErrors.bucketName = "Bucket name is required";
         }
 
@@ -94,7 +94,7 @@ export function TerraformForm() {
                 environment: config.environment,
                 terraform_repo_url: config.terraformRepoUrl,
                 resource_type: config.resourceType,
-                resource_config: config.resourceType === "s3_bucket" ? {
+                resource_config: config.resourceType === "gcs" ? {
                     bucket_name: config.bucketName,
                     is_public: config.isPublic,
                 } : {},
@@ -269,7 +269,7 @@ export function TerraformForm() {
                         </div>
                     </div>
 
-                    {config.resourceType === "s3_bucket" && (
+                    {config.resourceType === "gcs" && (
                         <div className="p-4 border rounded-lg bg-muted/20 space-y-4 animate-in fade-in slide-in-from-top-2">
                             <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
                                 Bucket Configuration
