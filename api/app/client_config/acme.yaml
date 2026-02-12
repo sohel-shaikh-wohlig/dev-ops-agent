@@ -1,0 +1,7 @@
+gcp:
+  dev:
+    project_id: "acme-dev-project"
+    project_location: "asia-south1"
+  prod:
+    project_id: "acme-prod-project"
+    project_location: "asia-south1"

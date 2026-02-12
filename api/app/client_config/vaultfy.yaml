@@ -1,0 +1,14 @@
+gcp:
+  dev:
+    project_id: "prj-vaultfy-dev"
+    location: "asia-south1"
+  prod:
+    project_id: "prj-vaultfy-prod"
+    location: "europe-west3"  
+argocd:
+  dev:
+    server: "https://argocd-dev.vaultfy.ai"
+    username: "admin"
+  prod:
+    server: "https://argocd-prod.vaultfy.ai"
+    username: "admin"

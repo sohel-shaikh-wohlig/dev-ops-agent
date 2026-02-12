@@ -362,6 +362,117 @@ class GitUtilitiesService:
             logger.error(f"Failed to cleanup repository: {e}")
 
     @staticmethod
+    def create_and_checkout_branch(
+        repo_dir: Path, branch_name: str
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Create and checkout a new branch.
+
+        Args:
+            repo_dir: Repository directory
+            branch_name: Name for the new branch
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        logger.info(f"Creating and checking out branch: {branch_name}")
+        return GitUtilitiesService.run_git_command(
+            ['checkout', '-b', branch_name], repo_dir
+        )
+
+    @staticmethod
+    def push_branch(
+        repo_dir: Path, branch_name: str
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Push a branch to the remote with upstream tracking.
+
+        Args:
+            repo_dir: Repository directory
+            branch_name: Branch to push
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        logger.info(f"Pushing branch: {branch_name}")
+        success, error = GitUtilitiesService.run_git_command(
+            ['push', '-u', 'origin', branch_name], repo_dir
+        )
+        if success:
+            logger.info(f"Branch {branch_name} pushed successfully")
+        else:
+            logger.error(f"Failed to push branch {branch_name}: {error}")
+        return success, error
+
+    @staticmethod
+    def create_pull_request(
+        repo_url: str,
+        branch: str,
+        base: str,
+        title: str,
+        body: str,
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Create a GitHub Pull Request using the ``gh`` CLI.
+
+        Args:
+            repo_url: Repository URL (HTTPS or SSH)
+                      e.g. https://github.com/org/repo
+                           git@github.com:org/repo.git
+            branch: Head branch for the PR
+            base: Base branch (e.g. main)
+            title: PR title
+            body: PR description body
+
+        Returns:
+            Tuple of (success, error_message, pr_url)
+        """
+        # Extract owner/repo from URL (supports both HTTPS and SSH formats)
+        # SSH:   git@github.com:org/repo.git  -> org/repo
+        # HTTPS: https://github.com/org/repo  -> org/repo
+        repo_clean = repo_url.rstrip("/").removesuffix(".git")
+        if repo_clean.startswith("git@"):
+            # git@github.com:org/repo -> org/repo
+            owner_repo = repo_clean.split(":")[-1]
+        else:
+            # https://github.com/org/repo -> org/repo
+            parts = repo_clean.split("/")
+            owner_repo = f"{parts[-2]}/{parts[-1]}"
+
+        logger.info(f"Creating PR in {owner_repo}: {branch} -> {base}")
+        try:
+            result = subprocess.run(
+                [
+                    'gh', 'pr', 'create',
+                    '--repo', owner_repo,
+                    '--head', branch,
+                    '--base', base,
+                    '--title', title,
+                    '--body', body,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() or "Unknown error creating PR"
+                logger.error(f"PR creation failed: {error_msg}")
+                return False, error_msg, None
+
+            pr_url = result.stdout.strip()
+            logger.info(f"PR created: {pr_url}")
+            return True, None, pr_url
+
+        except subprocess.TimeoutExpired:
+            error_msg = "gh pr create timed out"
+            logger.error(error_msg)
+            return False, error_msg, None
+        except Exception as e:
+            error_msg = f"Failed to create PR: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg, None
+
+    @staticmethod
     def create_repository_secrets(
         secrets_file: Path,
         owner: str,
