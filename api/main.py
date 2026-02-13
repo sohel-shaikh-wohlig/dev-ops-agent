@@ -15,6 +15,10 @@ from app.core.logging_config import setup_logging
 from app.routes import argocd, routes, configmap, gitops, terraform
 from app.routes.configmap import gitops_router
 from app.routes.github_webhook import github_router, terraform_pr_router
+from app.core.pubsub import pubsub_subscriber
+from app.core.redis import redis_manager
+from app.core.websocket_manager import ws_manager
+from app.routes.websocket import ws_router
 from app.utils.cleanup import cleanup_old_sessions
 
 
@@ -34,11 +38,16 @@ async def lifespan(app: FastAPI):
     logger.info(f"Environment: {settings.ENVIRONMENT}")
 
     settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    
+    await redis_manager.connect()
+    await pubsub_subscriber.start()
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting DevOps Automation API")
+    await pubsub_subscriber.stop()
+    await ws_manager.disconnect_all()
+    await redis_manager.close()
     await cleanup_old_sessions()
 
 
@@ -100,6 +109,7 @@ app.include_router(gitops_router, prefix="/api")
 app.include_router(terraform.router, prefix="/api")
 app.include_router(github_router, prefix="/api")
 app.include_router(terraform_pr_router, prefix="/api")
+app.include_router(ws_router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_event():

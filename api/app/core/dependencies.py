@@ -3,8 +3,10 @@
 from typing import Optional
 from fastapi import Depends, HTTPException, Query, Security, status
 from fastapi.security import APIKeyHeader
+from redis.asyncio import Redis
 
 from app.core.config import Settings, get_settings
+from app.core.redis import redis_manager
 from app.services.argocd_service import ArgoCDService, EnvironmentConfigError
 
 
@@ -149,3 +151,8 @@ def is_argocd_available(env: Optional[str] = None) -> bool:
 def get_settings_dependency() -> Settings:
     """Dependency to get settings"""
     return get_settings()
+
+
+async def get_redis_client() -> Redis:
+    """Dependency to get the async Redis client."""
+    return redis_manager.client

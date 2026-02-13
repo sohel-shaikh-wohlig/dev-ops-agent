@@ -80,15 +80,11 @@ class GitHubWebhookController:
         """
         Return the current Terraform plan/apply status for a PR.
 
-        Raises:
-            HTTPException 404: PR not found in the store.
+        Returns a default idle response when the PR has no stored status.
         """
-        data = self.service.get_pr_status(pr_number)
+        data = await self.service.get_pr_status(pr_number)
         if data is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"PR #{pr_number} not found",
-            )
+            return PRStatusResponse(pr_number=pr_number, state="idle")
 
         return PRStatusResponse(
             pr_number=pr_number,

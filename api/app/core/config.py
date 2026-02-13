@@ -104,6 +104,27 @@ class Settings(BaseSettings):
     # Preview Session Configuration
     PREVIEW_SESSION_TTL_MINUTES: int = Field(60, description="Preview session time-to-live in minutes")
 
+    # ==========================================================================
+    # Redis Configuration
+    # ==========================================================================
+    REDIS_HOST: str = Field("localhost", description="Redis server host")
+    REDIS_PORT: int = Field(6379, description="Redis server port")
+    REDIS_DB: int = Field(0, description="Redis database number")
+    REDIS_PASSWORD: Optional[str] = Field(None, description="Redis password")
+    REDIS_MAX_CONNECTIONS: int = Field(10, description="Redis connection pool max connections")
+    REDIS_SOCKET_TIMEOUT: int = Field(5, description="Redis socket timeout in seconds")
+    REDIS_CACHE_URL: Optional[str] = Field(None, description="Full Redis URL (overrides host/port/db)")
+    REDIS_PUBSUB_CHANNEL_PREFIX: str = Field("pr_updates", description="Redis Pub/Sub channel prefix for PR status events")
+
+    @property
+    def redis_url(self) -> str:
+        """Construct Redis URL from config, or return REDIS_CACHE_URL if set."""
+        if self.REDIS_CACHE_URL:
+            return self.REDIS_CACHE_URL
+        if self.REDIS_PASSWORD:
+            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
     # Cloudflare
     CLOUDFLARE_TOKEN: str = Field("CLOUDFLARE_TOKEN", description="Cloudflare Token")
     CLOUDFLARE_ZONE_ID: str = Field("CLOUDFLARE_ZONE_ID", description="Cloudflare Zone ID")
