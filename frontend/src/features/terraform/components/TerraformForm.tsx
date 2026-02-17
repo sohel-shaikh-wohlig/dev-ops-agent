@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { ENVIRONMENTS } from "@/shared/constants/environments";
 import { CLIENTS, RESOURCE_TYPES } from "@/shared/constants/terraform";
 import { provisionTerraform } from "../services/terraform-service";
+import { WebSocketResponseView } from "./WebSocketResponseView";
 
 interface TerraformConfig {
     client: string;
@@ -50,6 +51,8 @@ export function TerraformForm() {
         type: "success" | "error";
         message: string;
     } | null>(null);
+
+    const [showResponseScreen, setShowResponseScreen] = useState<number | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -85,6 +88,7 @@ export function TerraformForm() {
         }
 
         // Clear errors if valid
+        // Clear errors if valid
         setErrors({});
         setIsLoading(true);
 
@@ -100,7 +104,16 @@ export function TerraformForm() {
                 } : {},
             };
 
-            await provisionTerraform(payload);
+            const response = await provisionTerraform(payload);
+
+            if (response.status === "success" && response.pr_url) {
+                const prUrl = response.pr_url;
+                const prNumber = prUrl.split("/").pop();
+
+                if (prNumber && !isNaN(Number(prNumber))) {
+                    setShowResponseScreen(Number(prNumber));
+                }
+            }
 
             setFormMessage({
                 type: "success",
@@ -109,15 +122,6 @@ export function TerraformForm() {
             toast.success("Configuration Submitted", {
                 description: "Your Terraform resource request has been processed.",
             });
-
-            // Optional: Reset form after success? The requirement says "Clear messages when switching resource types", 
-            // but for submit it says "Reset form state" ONLY for Cancel. 
-            // However, usually successful submission implies some feedback. 
-            // Requirement 4 says Submit -> Show success or error message. 
-            // I will keep the state to allow user to see what they submitted or submit another similar one, 
-            // unless strictly required to reset. 
-            // Re-reading: "Cancel: Reset form state". "Submit: ... Show success or error message".
-            // So I won't reset on success.
 
         } catch (error: any) {
             console.error(error);
@@ -146,8 +150,10 @@ export function TerraformForm() {
         setErrors({});
     };
 
-    return (
-        <Card className="w-full max-w-2xl">
+    return showResponseScreen ? (
+        <WebSocketResponseView prNumber={showResponseScreen} />
+    ) : (
+        <Card className="w-full max-w-x1">
             <CardHeader>
                 <div className="flex items-center gap-2">
                     <div className="p-2 bg-primary/10 rounded-lg">
