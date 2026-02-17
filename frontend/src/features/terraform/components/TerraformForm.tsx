@@ -52,7 +52,7 @@ export function TerraformForm() {
         message: string;
     } | null>(null);
 
-    const [showResponseScreen, setShowResponseScreen] = useState<number | null>(null);
+    const [showResponseScreen, setShowResponseScreen] = useState<{ prNumber: number; repoName: string } | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -111,7 +111,15 @@ export function TerraformForm() {
                 const prNumber = prUrl.split("/").pop();
 
                 if (prNumber && !isNaN(Number(prNumber))) {
-                    setShowResponseScreen(Number(prNumber));
+                    // Extract owner and repo from PR URL (e.g., https://github.com/owner/repo/pull/34)
+                    const urlParts = prUrl.split("/"); // ["https:", "", "github.com", "owner", "repo", "pull", "34"]
+                    const repoIndex = urlParts.indexOf("pull") - 1;
+                    const ownerIndex = repoIndex - 1;
+
+                    if (repoIndex > 0 && ownerIndex > 0) {
+                        const repoName = `${urlParts[ownerIndex]}/${urlParts[repoIndex]}`;
+                        setShowResponseScreen({ prNumber: Number(prNumber), repoName });
+                    }
                 }
             }
 
@@ -151,7 +159,7 @@ export function TerraformForm() {
     };
 
     return showResponseScreen ? (
-        <WebSocketResponseView prNumber={showResponseScreen} />
+        <WebSocketResponseView prNumber={showResponseScreen.prNumber} repoName={showResponseScreen.repoName} />
     ) : (
         <Card className="w-full max-w-x1">
             <CardHeader>

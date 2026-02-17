@@ -174,6 +174,7 @@ class GitHubWebhookService:
 
         pr_number: int = issue.get("number", 0)
         comment = payload.get("comment", {})
+        comment_id: int = comment.get("id", 0)
         body: str = comment.get("body", "")
         repo_name: str = payload.get("repository", {}).get("full_name", "")
 
@@ -182,6 +183,7 @@ class GitHubWebhookService:
         )
 
         entry = await _ensure_pr(pr_number)
+        entry["comment_id"] = comment_id
         entry["last_comment"] = body[:500]  # truncate for safety
 
         # --- Detect plan result ---

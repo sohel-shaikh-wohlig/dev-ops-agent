@@ -8,6 +8,10 @@ import subprocess
 import shutil
 from pathlib import Path
 from typing import Dict, Optional, Tuple, List
+
+import httpx
+from fastapi import HTTPException, status
+
 from app.core.logging_config import logger
 from app.core.config import get_settings
 
@@ -590,6 +594,159 @@ class GitUtilitiesService:
             error_msg = f"Failed to create repository secrets: {str(e)}"
             logger.error(error_msg)
             return False, error_msg
+
+    @staticmethod
+    async def get_comment_by_id(
+        comment_id: int, repo_name: Optional[str] = None
+    ) -> dict:
+        """
+        Retrieve a specific GitHub issue comment by its ID.
+
+        Args:
+            comment_id: The unique comment ID.
+            repo_name: Full repository name (``owner/repo``).
+                       Falls back to ``GITOPS_REPO_URL`` from settings if not
+                       provided.
+
+        Returns:
+            Dict with comment data from the GitHub API.
+
+        Raises:
+            HTTPException 400: If no repository could be determined.
+            HTTPException 404: If the comment does not exist.
+            HTTPException 502: If the GitHub API request fails.
+        """
+        if not repo_name:
+            settings = get_settings()
+            repo_url = settings.GITOPS_REPO_URL
+            if not repo_url:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="repo_name is required when GITOPS_REPO_URL is not configured",
+                )
+            # Extract owner/repo from URL
+            repo_clean = repo_url.rstrip("/").removesuffix(".git")
+            if repo_clean.startswith("git@"):
+                repo_name = repo_clean.split(":")[-1]
+            else:
+                parts = repo_clean.split("/")
+                repo_name = f"{parts[-2]}/{parts[-1]}"
+
+        settings = get_settings()
+        url = f"https://api.github.com/repos/{repo_name}/issues/comments/{comment_id}"
+        headers = {
+            "Accept": "application/vnd.github.v3+json",
+            "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
+        }
+
+        logger.info(f"Fetching comment {comment_id} from {repo_name}")
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=headers, timeout=30)
+        except httpx.HTTPError as exc:
+            logger.error(f"GitHub API request failed for comment {comment_id}: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to reach GitHub API: {exc}",
+            )
+
+        if response.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Comment {comment_id} not found in {repo_name}",
+            )
+
+        if response.status_code != 200:
+            logger.error(
+                f"GitHub API error for comment {comment_id}: "
+                f"{response.status_code} {response.text}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"GitHub API returned {response.status_code}",
+            )
+
+        return response.json()
+
+    @staticmethod
+    async def post_pr_comment(
+        pr_number: int, comment: str, repo_name: Optional[str] = None
+    ) -> dict:
+        """
+        Post a comment on a GitHub pull request.
+
+        Args:
+            pr_number: The pull request / issue number.
+            comment: The comment body text.
+            repo_name: Full repository name (``owner/repo``).
+                       Falls back to ``GITOPS_REPO_URL`` from settings if not
+                       provided.
+
+        Returns:
+            Dict with the created comment data from the GitHub API.
+
+        Raises:
+            HTTPException 400: If no repository could be determined.
+            HTTPException 404: If the PR does not exist.
+            HTTPException 502: If the GitHub API request fails.
+        """
+        if not repo_name:
+            settings = get_settings()
+            repo_url = settings.GITOPS_REPO_URL
+            if not repo_url:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="repo_name is required when GITOPS_REPO_URL is not configured",
+                )
+            repo_clean = repo_url.rstrip("/").removesuffix(".git")
+            if repo_clean.startswith("git@"):
+                repo_name = repo_clean.split(":")[-1]
+            else:
+                parts = repo_clean.split("/")
+                repo_name = f"{parts[-2]}/{parts[-1]}"
+
+        settings = get_settings()
+        url = f"https://api.github.com/repos/{repo_name}/issues/{pr_number}/comments"
+        headers = {
+            "Accept": "application/vnd.github.v3+json",
+            "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
+        }
+        payload = {"body": comment}
+
+        logger.info(f"Posting comment on PR #{pr_number} in {repo_name}")
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    url, headers=headers, json=payload, timeout=30
+                )
+        except httpx.HTTPError as exc:
+            logger.error(f"GitHub API request failed for PR #{pr_number}: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to reach GitHub API: {exc}",
+            )
+
+        if response.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"PR #{pr_number} not found in {repo_name}",
+            )
+
+        if response.status_code not in (200, 201):
+            logger.error(
+                f"GitHub API error for PR #{pr_number}: "
+                f"{response.status_code} {response.text}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"GitHub API returned {response.status_code}",
+            )
+
+        logger.info(f"Comment posted on PR #{pr_number} in {repo_name}")
+        return response.json()
+
 
 # Create singleton instance
 git_service = GitUtilitiesService()
