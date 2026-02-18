@@ -22,7 +22,7 @@ import { Cloud, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { ENVIRONMENTS } from "@/shared/constants/environments";
-import { CLIENTS, RESOURCE_TYPES } from "@/shared/constants/terraform";
+import { CLIENTS, RESOURCE_TYPES, SERVICE_ACCOUNT_ROLES } from "@/shared/constants/terraform";
 import { provisionTerraform } from "../services/terraform-service";
 import { WebSocketResponseView } from "./WebSocketResponseView";
 
@@ -33,6 +33,9 @@ interface TerraformConfig {
     resourceType: string;
     bucketName: string;
     isPublic: boolean;
+    serviceAccountName: string;
+    serviceAccountRole: string;
+    generateKeys: boolean;
 }
 
 export function TerraformForm() {
@@ -43,6 +46,9 @@ export function TerraformForm() {
         resourceType: "",
         bucketName: "",
         isPublic: false,
+        serviceAccountName: "",
+        serviceAccountRole: "",
+        generateKeys: false,
     });
 
     const [isLoading, setIsLoading] = useState(false);
@@ -82,6 +88,12 @@ export function TerraformForm() {
             newErrors.bucketName = "Bucket name is required";
         }
 
+        if (config.resourceType === "svc") {
+            if (!config.serviceAccountName) {
+                newErrors.serviceAccountName = "Service Account name is required";
+            }
+        }
+
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
             return;
@@ -101,6 +113,10 @@ export function TerraformForm() {
                 resource_config: config.resourceType === "gcs" ? {
                     bucket_name: config.bucketName,
                     is_public: config.isPublic,
+                } : config.resourceType === "svc" ? {
+                    service_account_name: config.serviceAccountName,
+                    role: config.serviceAccountRole,
+                    generate_keys: config.generateKeys,
                 } : {},
             };
 
@@ -153,6 +169,9 @@ export function TerraformForm() {
             resourceType: "",
             bucketName: "",
             isPublic: false,
+            serviceAccountName: "",
+            serviceAccountRole: "",
+            generateKeys: false,
         });
         setFormMessage(null);
         setErrors({});
@@ -240,11 +259,15 @@ export function TerraformForm() {
                                         resourceType: val,
                                         bucketName: "",
                                         isPublic: false,
+                                        serviceAccountName: "",
+                                        serviceAccountRole: "",
+                                        generateKeys: false,
                                     });
                                     setFormMessage(null);
                                     if (errors.resourceType) {
                                         const newErrors: Record<string, string> = { ...errors, resourceType: "" };
-                                        delete newErrors.bucketName; // Clear bucket error if switching type
+                                        delete newErrors.bucketName;
+                                        delete newErrors.serviceAccountName;
                                         setErrors(newErrors);
                                     }
                                 }}
@@ -317,6 +340,68 @@ export function TerraformForm() {
                                     id="public-access"
                                     checked={config.isPublic}
                                     onCheckedChange={(checked) => setConfig({ ...config, isPublic: checked })}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {config.resourceType === "svc" && (
+                        <div className="p-4 border rounded-lg bg-muted/20 space-y-4 animate-in fade-in slide-in-from-top-2">
+                            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                                Service Account Configuration
+                            </h3>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="serviceAccountName">Service Account Name</Label>
+                                    <Input
+                                        id="serviceAccountName"
+                                        value={config.serviceAccountName}
+                                        onChange={(e) => {
+                                            setConfig({ ...config, serviceAccountName: e.target.value });
+                                            if (errors.serviceAccountName) setErrors({ ...errors, serviceAccountName: "" });
+                                        }}
+                                        placeholder="e.g. my-service-account"
+                                        className={errors.serviceAccountName ? "border-destructive" : ""}
+                                    />
+                                    {errors.serviceAccountName && (
+                                        <p className="text-sm text-destructive">{errors.serviceAccountName}</p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="serviceAccountRole">Roles</Label>
+                                    <Select
+                                        value={config.serviceAccountRole}
+                                        onValueChange={(val) => {
+                                            setConfig({ ...config, serviceAccountRole: val });
+                                        }}
+                                    >
+                                        <SelectTrigger id="serviceAccountRole">
+                                            <SelectValue placeholder="Select role" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {SERVICE_ACCOUNT_ROLES.map((role) => (
+                                                <SelectItem key={role.key} value={role.key}>
+                                                    {role.value}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between p-3 border rounded-md bg-background">
+                                <div className="space-y-0.5">
+                                    <Label htmlFor="generate-keys">Generate Keys</Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Create a JSON key file for this service account
+                                    </p>
+                                </div>
+                                <Switch
+                                    id="generate-keys"
+                                    checked={config.generateKeys}
+                                    onCheckedChange={(checked) => setConfig({ ...config, generateKeys: checked })}
                                 />
                             </div>
                         </div>
