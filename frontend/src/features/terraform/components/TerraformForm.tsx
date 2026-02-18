@@ -52,7 +52,7 @@ export function TerraformForm() {
         message: string;
     } | null>(null);
 
-    const [showResponseScreen, setShowResponseScreen] = useState<{ prNumber: number; repoName: string } | null>(null);
+    const [showResponseScreen, setShowResponseScreen] = useState<{ prNumber: number; repoName: string; branchName: string } | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -118,7 +118,7 @@ export function TerraformForm() {
 
                     if (repoIndex > 0 && ownerIndex > 0) {
                         const repoName = `${urlParts[ownerIndex]}/${urlParts[repoIndex]}`;
-                        setShowResponseScreen({ prNumber: Number(prNumber), repoName });
+                        setShowResponseScreen({ prNumber: Number(prNumber), repoName, branchName: response.branch || "" });
                     }
                 }
             }
@@ -159,7 +159,7 @@ export function TerraformForm() {
     };
 
     return showResponseScreen ? (
-        <WebSocketResponseView prNumber={showResponseScreen.prNumber} repoName={showResponseScreen.repoName} />
+        <WebSocketResponseView prNumber={showResponseScreen.prNumber} repoName={showResponseScreen.repoName} branchName={showResponseScreen.branchName} />
     ) : (
         <Card className="w-full max-w-x1">
             <CardHeader>

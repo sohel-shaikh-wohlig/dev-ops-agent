@@ -8,9 +8,10 @@ import { toast } from "sonner";
 interface Props {
     prNumber: number;
     repoName: string;
+    branchName: string;
 }
 
-export function WebSocketResponseView({ prNumber, repoName }: Props) {
+export function WebSocketResponseView({ prNumber, repoName, branchName }: Props) {
     const [status, setStatus] = useState<"connecting" | "connected" | "error" | "closed">("connecting");
     const [latestData, setLatestData] = useState<any>(null);
     const [logs, setLogs] = useState<string[]>([]);
@@ -57,6 +58,24 @@ export function WebSocketResponseView({ prNumber, repoName }: Props) {
         return match ? match[1] : null;
     };
 
+    // Check if comment indicates Atlantis apply completion
+    const checkIsApplyComplete = (comment: string): boolean => {
+        if (!comment) return false;
+        return comment.includes("Ran Apply for dir:") && comment.includes("Apply complete!");
+    };
+
+    // Extract resources_dir from "Ran Apply for dir: resources/gcs/dev workspace: default"
+    const extractResourcesDir = (comment: string): string | null => {
+        const match = comment.match(/Ran Apply for dir:\s*(.+?)\s+workspace:/);
+        return match ? match[1].trim() : null;
+    };
+
+    // Check if branch is safe to delete (Atlantis unlock/cleanup detected)
+    const isBranchSafeToDelete = (comment: string): boolean => {
+        if (!comment) return false;
+        return comment.includes("Locks and plans deleted for the projects and workspaces modified in this pull request:");
+    };
+
     // Handler for Accept/Reject actions
     const handleAction = async (action: "accept" | "reject") => {
         if (action === "accept" && !applyDirectory) {
@@ -99,8 +118,71 @@ export function WebSocketResponseView({ prNumber, repoName }: Props) {
         }
     };
 
+    // Trigger GitHub merge after successful apply
+    const triggerMerge = async (resourcesDir: string, prNumber: string) => {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL;
+
+        const payload = {
+            commit_title: `infra: apply successful for ${resourcesDir}`,
+            commit_message: `Atlantis apply completed successfully for directory: ${resourcesDir}\n\nTriggered via automation service after plan approval.\nMerged automatically.`,
+            merge_method: "squash",
+            repo_name: repoName,
+        };
+
+        try {
+            console.log(`Triggering auto-merge for PR #${prNumber}, dir: ${resourcesDir}`);
+            const response = await fetch(`${baseUrl}/github/pulls/${prNumber}/merge`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                throw new Error(`Merge failed: ${errorData}`);
+            }
+
+            console.log(`Auto-merge successful for PR #${prNumber}`);
+            toast.success(`PR #${prNumber} merged successfully (${resourcesDir})`);
+        } catch (error) {
+            console.error("Error triggering merge:", error);
+            toast.error(`Failed to auto-merge PR #${prNumber}`);
+        }
+    };
+
+    // Delete branch after merge/unlock
+    const deleteBranch = async () => {
+        if (!branchName || !repoName) {
+            console.warn("Cannot delete branch: branchName or repoName is missing");
+            return;
+        }
+
+        const baseUrl = import.meta.env.VITE_API_BASE_URL;
+
+        try {
+            console.log(`Deleting branch: ${branchName} from ${repoName}`);
+            const response = await fetch(
+                `${baseUrl}/github/branches/${encodeURIComponent(branchName)}?repo_name=${encodeURIComponent(repoName)}`,
+                { method: "DELETE" }
+            );
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                throw new Error(`Branch delete failed: ${errorData}`);
+            }
+
+            console.log(`Branch ${branchName} deleted successfully`);
+            toast.success(`Branch "${branchName}" deleted successfully`);
+        } catch (error) {
+            console.error("Error deleting branch:", error);
+            toast.error(`Failed to delete branch "${branchName}"`);
+        }
+    };
+
     // Fetch comment function
-    const fetchComment = async (commentId: string) => {
+    const fetchComment = async (commentId: string, prNumber: number) => {
         if (!commentId || !repoName) return;
 
         // Avoid refetching same comment
@@ -116,7 +198,7 @@ export function WebSocketResponseView({ prNumber, repoName }: Props) {
             // repoName is "owner/repo", handled by backend? 
             // Endpoint: http://127.0.0.1:8000/api/github/comments/{{comment_id}}?repo_name=(owner/repo)
             const baseUrl = import.meta.env.VITE_API_BASE_URL;
-            const response = await fetch(`${baseUrl}/github/comments/${commentId}?repo_name=${encodeURIComponent(repoName)}`);
+            const response = await fetch(`${baseUrl}/github/comments/${commentId}?repo_name=${encodeURIComponent(repoName)}&pr_number=${prNumber}`);
 
             if (!response.ok) {
                 throw new Error("Failed to fetch comment");
@@ -133,6 +215,23 @@ export function WebSocketResponseView({ prNumber, repoName }: Props) {
                     if (dir) {
                         setApplyDirectory(dir);
                     }
+                }
+
+                // Check if apply is complete and trigger auto-merge
+                if (checkIsApplyComplete(data.body)) {
+                    const resourcesDir = extractResourcesDir(data.body);
+                    if (resourcesDir) {
+                        console.log(`Apply complete detected for dir: ${resourcesDir}`);
+                        triggerMerge(resourcesDir, prNumber.toString());
+                    } else {
+                        console.warn("Apply complete detected but could not extract resources_dir");
+                    }
+                }
+
+                // Check if branch is safe to delete (Atlantis locks cleaned up)
+                if (isBranchSafeToDelete(data.body)) {
+                    console.log("Branch safe to delete detected, triggering branch deletion");
+                    deleteBranch();
                 }
             }
         } catch (err) {
@@ -188,7 +287,7 @@ export function WebSocketResponseView({ prNumber, repoName }: Props) {
 
                     const commentId = data.comment_id || (typeof data.comment_id !== 'string' || data.comment_id.includes(' ') ? null : data.last_comment);
                     if (commentId) {
-                        fetchComment(commentId);
+                        fetchComment(commentId, prNumber);
                     } else if (data.last_comment && !commentContent) {
                         // Fallback: if we have text but no ID, maybe just show text? 
                         // But requirement says "Fetch from API". 
