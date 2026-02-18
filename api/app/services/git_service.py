@@ -747,6 +747,291 @@ class GitUtilitiesService:
         logger.info(f"Comment posted on PR #{pr_number} in {repo_name}")
         return response.json()
 
+    @staticmethod
+    async def merge_pull_request(
+        pull_number: int,
+        commit_title: str,
+        commit_message: str = "",
+        merge_method: str = "squash",
+        repo_name: Optional[str] = None,
+    ) -> dict:
+        """
+        Merge a GitHub Pull Request via the GitHub REST API.
+
+        PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge
+
+        Args:
+            pull_number: The pull request number to merge.
+            commit_title: Title for the merge commit.
+            commit_message: Extra detail appended to the merge commit message.
+            merge_method: One of ``merge``, ``squash``, or ``rebase``
+                          (default: ``squash``).
+            repo_name: Full repository name (``owner/repo``).
+                       Falls back to ``GITOPS_REPO_URL`` from settings if not
+                       provided.
+
+        Returns:
+            Dict with the GitHub API response (sha, merged, message).
+
+        Raises:
+            HTTPException 400: If no repository could be determined or
+                               merge_method is invalid.
+            HTTPException 404: If the PR does not exist.
+            HTTPException 405: If the PR is not mergeable.
+            HTTPException 409: If the PR has a merge conflict.
+            HTTPException 422: If GitHub rejected the request (validation).
+            HTTPException 502: If the GitHub API request fails.
+        """
+        valid_merge_methods = {"merge", "squash", "rebase"}
+        if merge_method not in valid_merge_methods:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid merge_method '{merge_method}'. Must be one of: {sorted(valid_merge_methods)}",
+            )
+
+        if not repo_name:
+            settings = get_settings()
+            repo_url = settings.GITOPS_REPO_URL
+            if not repo_url:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="repo_name is required when GITOPS_REPO_URL is not configured",
+                )
+            repo_clean = repo_url.rstrip("/").removesuffix(".git")
+            if repo_clean.startswith("git@"):
+                repo_name = repo_clean.split(":")[-1]
+            else:
+                parts = repo_clean.split("/")
+                repo_name = f"{parts[-2]}/{parts[-1]}"
+
+        settings = get_settings()
+        url = f"https://api.github.com/repos/{repo_name}/pulls/{pull_number}/merge"
+        headers = {
+            "Accept": "application/vnd.github.v3+json",
+            "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
+        }
+        payload = {
+            "commit_title": commit_title,
+            "commit_message": commit_message,
+            "merge_method": merge_method,
+        }
+
+        logger.info(
+            f"Merging PR #{pull_number} in {repo_name} "
+            f"(method={merge_method})"
+        )
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.put(
+                    url, headers=headers, json=payload, timeout=30
+                )
+        except httpx.HTTPError as exc:
+            logger.error(f"GitHub API request failed for PR #{pull_number} merge: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to reach GitHub API: {exc}",
+            )
+
+        status_handlers = {
+            404: f"PR #{pull_number} not found in {repo_name}",
+            405: f"PR #{pull_number} is not mergeable (already merged or checks pending)",
+            409: f"PR #{pull_number} has a merge conflict and cannot be merged",
+            422: f"GitHub rejected the merge request for PR #{pull_number}: {response.text}",
+        }
+
+        if response.status_code in status_handlers:
+            detail = status_handlers[response.status_code]
+            logger.error(detail)
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=detail,
+            )
+
+        if response.status_code != 200:
+            logger.error(
+                f"GitHub API error merging PR #{pull_number}: "
+                f"{response.status_code} {response.text}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"GitHub API returned {response.status_code}",
+            )
+
+        logger.info(f"PR #{pull_number} merged successfully in {repo_name}")
+        return response.json()
+
+    @staticmethod
+    async def delete_branch(
+        branch_name: str,
+        repo_name: Optional[str] = None,
+    ) -> dict:
+        """
+        Delete a branch from a GitHub repository via the GitHub REST API.
+
+        DELETE /repos/{owner}/{repo}/git/refs/heads/{branch}
+
+        Args:
+            branch_name: The branch to delete (e.g. ``tf/client/dev/gcs/202501011200``).
+            repo_name:   Full repository name (``owner/repo``).
+                         Falls back to ``GITOPS_REPO_URL`` from settings if not
+                         provided.
+
+        Returns:
+            Dict with ``branch`` and ``deleted: True`` on success.
+
+        Raises:
+            HTTPException 400: If no repository could be determined.
+            HTTPException 404: If the branch does not exist.
+            HTTPException 502: If the GitHub API request fails.
+        """
+        if not repo_name:
+            settings = get_settings()
+            repo_url = settings.GITOPS_REPO_URL
+            if not repo_url:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="repo_name is required when GITOPS_REPO_URL is not configured",
+                )
+            repo_clean = repo_url.rstrip("/").removesuffix(".git")
+            if repo_clean.startswith("git@"):
+                repo_name = repo_clean.split(":")[-1]
+            else:
+                parts = repo_clean.split("/")
+                repo_name = f"{parts[-2]}/{parts[-1]}"
+
+        settings = get_settings()
+        url = f"https://api.github.com/repos/{repo_name}/git/refs/heads/{branch_name}"
+        headers = {
+            "Accept": "application/vnd.github.v3+json",
+            "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
+        }
+
+        logger.info(f"Deleting branch '{branch_name}' from {repo_name}")
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.delete(url, headers=headers, timeout=30)
+        except httpx.HTTPError as exc:
+            logger.error(f"GitHub API request failed deleting branch '{branch_name}': {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to reach GitHub API: {exc}",
+            )
+
+        if response.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Branch '{branch_name}' not found in {repo_name}",
+            )
+
+        # GitHub returns 204 No Content on successful branch deletion
+        if response.status_code != 204:
+            logger.error(
+                f"GitHub API error deleting branch '{branch_name}': "
+                f"{response.status_code} {response.text}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"GitHub API returned {response.status_code}",
+            )
+
+        logger.info(f"Branch '{branch_name}' deleted successfully from {repo_name}")
+        return {"branch": branch_name, "deleted": True}
+
+    @staticmethod
+    async def close_pull_request(
+        pull_number: int,
+        repo_name: Optional[str] = None,
+    ) -> dict:
+        """
+        Close a GitHub Pull Request without merging via the GitHub REST API.
+
+        PATCH /repos/{owner}/{repo}/pulls/{pull_number}
+        Body: {"state": "closed"}
+
+        Args:
+            pull_number: The pull request number to close.
+            repo_name:   Full repository name (``owner/repo``).
+                         Falls back to ``GITOPS_REPO_URL`` from settings if not
+                         provided.
+
+        Returns:
+            Dict with ``pull_number``, ``state``, and ``closed: True``.
+
+        Raises:
+            HTTPException 400: If no repository could be determined.
+            HTTPException 404: If the PR does not exist.
+            HTTPException 422: If GitHub rejected the request (e.g. already closed).
+            HTTPException 502: If the GitHub API request fails.
+        """
+        if not repo_name:
+            settings = get_settings()
+            repo_url = settings.GITOPS_REPO_URL
+            if not repo_url:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="repo_name is required when GITOPS_REPO_URL is not configured",
+                )
+            repo_clean = repo_url.rstrip("/").removesuffix(".git")
+            if repo_clean.startswith("git@"):
+                repo_name = repo_clean.split(":")[-1]
+            else:
+                parts = repo_clean.split("/")
+                repo_name = f"{parts[-2]}/{parts[-1]}"
+
+        settings = get_settings()
+        url = f"https://api.github.com/repos/{repo_name}/pulls/{pull_number}"
+        headers = {
+            "Accept": "application/vnd.github.v3+json",
+            "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
+        }
+        payload = {"state": "closed"}
+
+        logger.info(f"Closing PR #{pull_number} in {repo_name}")
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.patch(
+                    url, headers=headers, json=payload, timeout=30
+                )
+        except httpx.HTTPError as exc:
+            logger.error(f"GitHub API request failed closing PR #{pull_number}: {exc}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to reach GitHub API: {exc}",
+            )
+
+        if response.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"PR #{pull_number} not found in {repo_name}",
+            )
+
+        if response.status_code == 422:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"GitHub rejected close request for PR #{pull_number}: {response.text}",
+            )
+
+        if response.status_code != 200:
+            logger.error(
+                f"GitHub API error closing PR #{pull_number}: "
+                f"{response.status_code} {response.text}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"GitHub API returned {response.status_code}",
+            )
+
+        data = response.json()
+        logger.info(f"PR #{pull_number} closed successfully in {repo_name}")
+        return {
+            "pull_number": pull_number,
+            "state": data.get("state"),
+            "closed": True,
+        }
+
 
 # Create singleton instance
 git_service = GitUtilitiesService()

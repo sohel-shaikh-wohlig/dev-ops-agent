@@ -167,6 +167,7 @@ export function WebSocketResponseView({ prNumber, repoName }: Props) {
             console.log("Message received:", event.data);
             try {
                 const data = JSON.parse(event.data);
+                console.log("Parsed data:", data);
                 // Check if it looks like our expected data structure
                 if (data && typeof data === 'object' && ('plan_status' in data || 'state' in data)) {
                     setLatestData(data);

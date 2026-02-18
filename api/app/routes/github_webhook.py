@@ -150,3 +150,146 @@ async def post_pr_comment(request: PostCommentRequest) -> dict:
     return await git_service.post_pr_comment(
         request.pr_number, request.comment, request.repo_name
     )
+
+
+# ---------------------------------------------------------------------------
+# Merge Pull Request
+# ---------------------------------------------------------------------------
+
+
+class MergePRRequest(BaseModel):
+    commit_title: str = Field(
+        ..., description="Title for the merge commit"
+    )
+    commit_message: str = Field(
+        "", description="Extra detail appended to the merge commit message"
+    )
+    merge_method: str = Field(
+        "squash", description="Merge strategy: 'merge', 'squash', or 'rebase'"
+    )
+    repo_name: Optional[str] = Field(
+        None, description="Full repository name (owner/repo). Falls back to GITOPS_REPO_URL when omitted."
+    )
+
+
+@github_router.post(
+    "/pulls/{pull_number}/merge",
+    status_code=status.HTTP_200_OK,
+    summary="Merge a Pull Request",
+    description=(
+        "Merges the specified GitHub Pull Request using the GitHub REST API "
+        "(PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge). "
+        "Supports merge, squash, and rebase strategies."
+    ),
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid merge_method or missing repo_name"},
+        404: {"model": ErrorResponse, "description": "PR not found"},
+        405: {"model": ErrorResponse, "description": "PR is not mergeable"},
+        409: {"model": ErrorResponse, "description": "Merge conflict"},
+        422: {"model": ErrorResponse, "description": "GitHub validation error"},
+        502: {"model": ErrorResponse, "description": "GitHub API error"},
+    },
+)
+async def merge_pull_request(
+    pull_number: int,
+    request: MergePRRequest,
+) -> dict:
+    """
+    **Merge Pull Request**
+
+    Calls the GitHub API to merge the given PR. The ``merge_method`` controls
+    how commits are combined:
+
+    - ``squash`` — squashes all commits into one (default)
+    - ``merge``  — creates a merge commit
+    - ``rebase`` — rebases commits onto the base branch
+    """
+    return await github_webhook_controller.merge_pull_request(
+        pull_number=pull_number,
+        commit_title=request.commit_title,
+        commit_message=request.commit_message,
+        merge_method=request.merge_method,
+        repo_name=request.repo_name,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Delete Branch
+# ---------------------------------------------------------------------------
+
+
+@github_router.delete(
+    "/branches/{branch_name:path}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete a GitHub Branch",
+    description=(
+        "Deletes a branch from a GitHub repository using the GitHub REST API "
+        "(DELETE /repos/{owner}/{repo}/git/refs/heads/{branch}). "
+        "Branch names containing slashes (e.g. tf/client/dev/gcs/202501011200) "
+        "are fully supported via path parameter."
+    ),
+    responses={
+        400: {"model": ErrorResponse, "description": "Missing repo_name"},
+        404: {"model": ErrorResponse, "description": "Branch not found"},
+        502: {"model": ErrorResponse, "description": "GitHub API error"},
+    },
+)
+async def delete_branch(
+    branch_name: str,
+    repo_name: Optional[str] = Query(
+        None, description="Full repository name (owner/repo). Falls back to GITOPS_REPO_URL when omitted."
+    ),
+) -> dict:
+    """
+    **Delete GitHub Branch**
+
+    Removes the specified branch ref from the repository. The branch name
+    is captured as a path segment so forward slashes are preserved.
+
+    Returns ``{"branch": "<name>", "deleted": true}`` on success.
+    """
+    return await github_webhook_controller.delete_branch(
+        branch_name=branch_name,
+        repo_name=repo_name,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Close Pull Request
+# ---------------------------------------------------------------------------
+
+
+@github_router.patch(
+    "/pulls/{pull_number}/close",
+    status_code=status.HTTP_200_OK,
+    summary="Close a Pull Request",
+    description=(
+        "Closes the specified GitHub Pull Request without merging it, "
+        "using the GitHub REST API "
+        "(PATCH /repos/{owner}/{repo}/pulls/{pull_number} with state=closed). "
+        "Optionally accepts repo_name as a query parameter; "
+        "falls back to GITOPS_REPO_URL when omitted."
+    ),
+    responses={
+        400: {"model": ErrorResponse, "description": "Missing repo_name"},
+        404: {"model": ErrorResponse, "description": "PR not found"},
+        422: {"model": ErrorResponse, "description": "GitHub validation error (e.g. already closed)"},
+        502: {"model": ErrorResponse, "description": "GitHub API error"},
+    },
+)
+async def close_pull_request(
+    pull_number: int,
+    repo_name: Optional[str] = Query(
+        None, description="Full repository name (owner/repo). Falls back to GITOPS_REPO_URL when omitted."
+    ),
+) -> dict:
+    """
+    **Close Pull Request**
+
+    Sets the PR state to ``closed`` without merging. Returns
+    ``{"pull_number": N, "state": "closed", "closed": true}`` on success.
+    """
+    return await github_webhook_controller.close_pull_request(
+        pull_number=pull_number,
+        repo_name=repo_name,
+    )

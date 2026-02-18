@@ -6,12 +6,14 @@ and exposes Terraform PR status lookups.
 
 import hashlib
 import hmac
+from typing import Optional
 
 from fastapi import HTTPException, Request, status
 
 from app.core.config import get_settings
 from app.core.logging_config import logger
 from app.models.github_webhook import PRStatusResponse
+from app.services.git_service import git_service
 from app.services.github_webhook_service import github_webhook_service
 
 
@@ -94,6 +96,114 @@ class GitHubWebhookController:
             approved=data["approved"],
             state=data["state"],
             last_comment=data["last_comment"],
+        )
+
+    # ------------------------------------------------------------------
+    # PR merge
+    # ------------------------------------------------------------------
+
+    async def merge_pull_request(
+        self,
+        pull_number: int,
+        commit_title: str,
+        commit_message: str,
+        merge_method: str,
+        repo_name: Optional[str],
+    ) -> dict:
+        """
+        Merge a GitHub Pull Request.
+
+        Delegates to the git_service layer which calls:
+          PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge
+
+        Args:
+            pull_number:    PR number to merge.
+            commit_title:   Title for the merge commit.
+            commit_message: Optional extra detail for the commit message.
+            merge_method:   One of ``merge``, ``squash``, or ``rebase``.
+            repo_name:      Full repository name (``owner/repo``).
+
+        Returns:
+            Dict with GitHub API response (sha, merged, message).
+
+        Raises:
+            HTTPException: Propagated from git_service (400, 404, 405, 409, 422, 502).
+        """
+        logger.info(
+            f"merge_pull_request | pr={pull_number} | method={merge_method} | repo={repo_name}"
+        )
+        return await git_service.merge_pull_request(
+            pull_number=pull_number,
+            commit_title=commit_title,
+            commit_message=commit_message,
+            merge_method=merge_method,
+            repo_name=repo_name,
+        )
+
+    # ------------------------------------------------------------------
+    # Close Pull Request
+    # ------------------------------------------------------------------
+
+    async def close_pull_request(
+        self,
+        pull_number: int,
+        repo_name: Optional[str],
+    ) -> dict:
+        """
+        Close a GitHub Pull Request without merging.
+
+        Delegates to the git_service layer which calls:
+          PATCH /repos/{owner}/{repo}/pulls/{pull_number}
+
+        Args:
+            pull_number: PR number to close.
+            repo_name:   Full repository name (``owner/repo``).
+
+        Returns:
+            Dict with ``pull_number``, ``state``, and ``closed: True``.
+
+        Raises:
+            HTTPException: Propagated from git_service (400, 404, 422, 502).
+        """
+        logger.info(
+            f"close_pull_request | pr={pull_number} | repo={repo_name}"
+        )
+        return await git_service.close_pull_request(
+            pull_number=pull_number,
+            repo_name=repo_name,
+        )
+
+    # ------------------------------------------------------------------
+    # Branch deletion
+    # ------------------------------------------------------------------
+
+    async def delete_branch(
+        self,
+        branch_name: str,
+        repo_name: Optional[str],
+    ) -> dict:
+        """
+        Delete a GitHub branch.
+
+        Delegates to the git_service layer which calls:
+          DELETE /repos/{owner}/{repo}/git/refs/heads/{branch}
+
+        Args:
+            branch_name: Full branch name to delete (may contain slashes).
+            repo_name:   Full repository name (``owner/repo``).
+
+        Returns:
+            Dict with ``branch`` and ``deleted: True``.
+
+        Raises:
+            HTTPException: Propagated from git_service (400, 404, 502).
+        """
+        logger.info(
+            f"delete_branch | branch={branch_name} | repo={repo_name}"
+        )
+        return await git_service.delete_branch(
+            branch_name=branch_name,
+            repo_name=repo_name,
         )
 
     # ------------------------------------------------------------------
