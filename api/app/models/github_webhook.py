@@ -38,6 +38,14 @@ class PRStatusResponse(BaseModel):
         default="",
         description="Last Atlantis comment body (truncated)",
     )
+    comment_id: Optional[int] = Field(
+        default=None,
+        description="GitHub comment ID of the last Atlantis comment",
+    )
+    repo_name: str = Field(
+        default="",
+        description="Full repository name (owner/repo) from the webhook event",
+    )
 
     class Config:
         json_schema_extra = {
@@ -49,5 +57,7 @@ class PRStatusResponse(BaseModel):
                 "approved": False,
                 "state": "open",
                 "last_comment": "",
+                "comment_id": 987654321,
+                "repo_name": "org/repo",
             }
         }

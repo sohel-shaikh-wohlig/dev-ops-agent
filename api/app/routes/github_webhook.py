@@ -15,6 +15,7 @@ from fastapi import APIRouter, Query, Request, status
 from pydantic import BaseModel, Field
 
 from app.controllers.github_webhook_controller import github_webhook_controller
+from app.core.logging_config import logger
 from app.models.github_webhook import PRStatusResponse
 from app.models.common import ErrorResponse
 from app.services.git_service import git_service
@@ -110,6 +111,7 @@ async def get_comment_by_id(
     Fetches a single issue comment from the GitHub API using the
     comment's numeric ID.
     """
+    logger.info(f"get_comment_by_id | comment_id={comment_id} | repo_name={repo_name!r}")
     return await git_service.get_comment_by_id(comment_id, repo_name)
 
 

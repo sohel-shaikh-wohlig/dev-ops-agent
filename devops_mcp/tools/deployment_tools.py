@@ -304,6 +304,127 @@ def get_deployment_tools() -> list[Tool]:
         ),
 
         Tool(
+            name="provision_resource",
+            description="""
+    Provision a Terraform resource via GitOps Pull Request.
+
+    This tool renders a .tf template for the given resource_type, pushes it
+    to a feature branch in the target Terraform repository, and opens a Pull
+    Request so Atlantis can auto-plan the change.
+
+    Workflow:
+    1. Load .tf template from templates/terraform/{resource_type}.tf
+    2. Load client YAML config for environment-specific credentials
+    3. Render template with resource_config values
+    4. Clone Terraform repo, create feature branch
+    5. Write rendered .tf file and commit
+    6. Push branch and open Pull Request
+
+    IMPORTANT: This is a write operation that will:
+    - Push commits to the Terraform repository
+    - Open a Pull Request (Atlantis will auto-plan on PR open)
+
+    Branch name format: tf/{client_name}/{environment}/{resource_type}/{timestamp}
+    """,
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "client_name": {
+                        "type": "string",
+                        "description": "Client or project identifier (lowercase, no spaces/slashes). E.g. 'acme-corp'",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "environment": {
+                        "type": "string",
+                        "enum": ["dev", "staging", "production", "qa", "uat"],
+                        "description": "Target environment"
+                    },
+                    "resource_type": {
+                        "type": "string",
+                        "description": "Terraform resource type to provision (e.g. 'gcs', 'cloud_sql', 'gke')",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "resource_config": {
+                        "type": "object",
+                        "description": "Resource-specific configuration variables. Shape depends on resource_type. E.g. for 'gcs': {\"bucket_name\": \"my-bucket\", \"is_public\": false}",
+                        "additionalProperties": True
+                    },
+                    "terraform_repo_url": {
+                        "type": "string",
+                        "description": "Git repository URL (HTTPS or SSH). E.g. 'git@github.com:org/terraform_devops.git'"
+                    }
+                },
+                "required": ["client_name", "environment", "resource_type", "terraform_repo_url"]
+            }
+        ),
+
+        Tool(
+            name="get_provision_status",
+            description="""
+    Get the current Terraform provisioning status for a Pull Request.
+
+    This tool:
+    1. Fetches the PR's Terraform plan/apply status (plan_status, apply_status, state, etc.)
+    2. Retrieves the full body of the latest Atlantis comment posted on that PR
+
+    Use this to monitor the progress of a Terraform provisioning PR opened by
+    provision_resource, or to check what Atlantis has planned/applied.
+    """,
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "pr_number": {
+                        "type": "integer",
+                        "description": "GitHub Pull Request number to check status for",
+                        "minimum": 1
+                    }
+                },
+                "required": ["pr_number"]
+            }
+        ),
+
+        Tool(
+            name="process_provision_decision",
+            description="""
+    Approve or reject a Terraform provisioning Pull Request by posting an Atlantis command comment.
+
+    - "accept": posts `atlantis apply -d <apply_directory>` — triggers Atlantis to apply the plan.
+    - "reject": posts `atlantis unlock` — releases the Atlantis lock and cancels the plan.
+
+    Use this after reviewing the plan output from get_provision_status.
+
+    IMPORTANT: This is a write operation — it posts a comment that triggers Atlantis to
+    apply infrastructure changes (accept) or discard them (reject).
+    """,
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "pr_number": {
+                        "type": "integer",
+                        "description": "GitHub Pull Request number",
+                        "minimum": 1
+                    },
+                    "repo_name": {
+                        "type": "string",
+                        "description": "Full repository name (owner/repo), e.g. tehvault/terraform_devops"
+                    },
+                    "action": {
+                        "type": "string",
+                        "enum": ["accept", "reject"],
+                        "description": "Decision: 'accept' to apply the Terraform plan, 'reject' to unlock and discard"
+                    },
+                    "apply_directory": {
+                        "type": "string",
+                        "description": "Directory passed to `atlantis apply -d`. Required when action is 'accept'"
+                    }
+                },
+                "required": ["pr_number", "repo_name", "action"]
+            }
+        ),
+
+        Tool(
             name="quick_deploy_microservice",
             description="""
             Simplified deployment tool that requires only environment and GitHub URL.

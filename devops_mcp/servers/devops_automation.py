@@ -93,6 +93,15 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     elif name == "quick_deploy_microservice":
         return await quick_deploy_microservice(arguments)
 
+    elif name == "provision_resource":
+        return await provision_resource(arguments)
+
+    elif name == "get_provision_status":
+        return await get_provision_status(arguments)
+
+    elif name == "process_provision_decision":
+        return await process_provision_decision(arguments)
+
     else:
         return [TextContent(
             type="text",
@@ -452,6 +461,202 @@ async def quick_deploy_microservice(arguments: dict) -> list[TextContent]:
 
     # Delegate to existing deploy_microservice
     return await deploy_microservice(derived_arguments)
+
+
+async def provision_resource(arguments: dict) -> list[TextContent]:
+    """Provision a Terraform resource via GitOps PR."""
+    payload = {
+        "client_name": arguments["client_name"],
+        "environment": arguments["environment"],
+        "resource_type": arguments["resource_type"],
+        "terraform_repo_url": arguments["terraform_repo_url"],
+        "resource_config": arguments.get("resource_config", {}),
+    }
+
+    try:
+        result = await api_client.post("/api/terraform/provision", data=payload)
+
+        # TerraformProvisionResponse is returned directly (not BaseResponse-wrapped)
+        status = result.get("status", "unknown")
+        message = result.get("message", "")
+        resource_type = result.get("resource_type", arguments["resource_type"])
+        environment = result.get("environment", arguments["environment"])
+        branch = result.get("branch")
+        pr_url = result.get("pr_url")
+
+        response_text = f"**Terraform Provisioning {'Successful' if status == 'success' else 'Completed'}**\n\n"
+        response_text += f"**Client:** {arguments['client_name']}\n"
+        response_text += f"**Resource:** {resource_type}\n"
+        response_text += f"**Environment:** {environment}\n"
+        response_text += f"**Status:** {status}\n"
+        response_text += f"**Message:** {message}\n"
+        if branch:
+            response_text += f"**Branch:** {branch}\n"
+        if pr_url:
+            response_text += f"**Pull Request:** {pr_url}\n"
+
+        return [TextContent(type="text", text=response_text)]
+
+    except Exception as e:
+        return [TextContent(
+            type="text",
+            text=f"Terraform provisioning error: {str(e)}"
+        )]
+
+
+async def get_provision_status(arguments: dict) -> list[TextContent]:
+    """
+    Fetch Terraform PR status and return the latest Atlantis comment body.
+
+    Steps:
+    1. GET /terraform/pr-status/{pr_number} → extract comment_id
+    2. GET /github/comments/{comment_id}    → extract body
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    pr_number = arguments["pr_number"]
+
+    try:
+        # Step 1: Fetch PR status to get the comment_id
+        await _send_log(f"Fetching Terraform PR status for PR #{pr_number}", "INFO")
+        pr_status = await api_client.get(f"/api/terraform/pr-status/{pr_number}")
+
+        comment_id = pr_status.get("comment_id")
+        repo_name = pr_status.get("repo_name") or ""  # normalise None → ""
+
+        logger.info(f"PR #{pr_number} status | comment_id={comment_id} repo_name={repo_name!r}")
+        await _send_log(f"PR #{pr_number} | comment_id={comment_id} | repo_name={repo_name!r}", "DEBUG")
+
+        if not comment_id:
+            # Return PR status fields even when no comment is available yet
+            state = pr_status.get("state", "unknown")
+            plan_status = pr_status.get("plan_status", "pending")
+            apply_status = pr_status.get("apply_status", "pending")
+            logger.info(f"PR #{pr_number} has no comment_id yet (state={state})")
+            return [TextContent(
+                type="text",
+                text=(
+                    f"**Provision Status for PR #{pr_number}**\n\n"
+                    f"**State:** {state}\n"
+                    f"**Plan Status:** {plan_status}\n"
+                    f"**Apply Status:** {apply_status}\n\n"
+                    "No Atlantis comment has been posted yet."
+                )
+            )]
+
+        # Step 2: Fetch the comment body using the comment_id
+        # Pass repo_name as a query param so the API can resolve the correct repo
+        if not repo_name:
+            logger.warning(f"PR #{pr_number}: repo_name is empty — comment lookup may fail (comment_id={comment_id})")
+            await _send_log(f"WARNING: repo_name is empty for PR #{pr_number}, comment lookup may return 404", "WARNING")
+
+        comment_params = {"repo_name": repo_name} if repo_name else {}
+        await _send_log(f"Fetching GitHub comment {comment_id} with params={comment_params}", "INFO")
+        comment = await api_client.get(f"/api/github/comments/{comment_id}", params=comment_params)
+
+        body = comment.get("body", "")
+        if not body:
+            logger.warning(f"Comment {comment_id} returned an empty body")
+            return [TextContent(
+                type="text",
+                text=f"Comment {comment_id} was found but has no body content."
+            )]
+
+        return [TextContent(type="text", text=body)]
+
+    except Exception as e:
+        logger.error(f"get_provision_status error for PR #{pr_number}: {e}")
+        return [TextContent(
+            type="text",
+            text=f"Error fetching provision status for PR #{pr_number}: {str(e)}"
+        )]
+
+
+async def process_provision_decision(arguments: dict) -> list[TextContent]:
+    """
+    Approve or reject a Terraform provisioning PR by posting an Atlantis command comment.
+
+    - accept: posts `atlantis apply -d <apply_directory>`
+    - reject: posts `atlantis unlock`
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    pr_number = arguments.get("pr_number")
+    repo_name = arguments.get("repo_name")
+    action = arguments.get("action")
+
+    # --- Validate required parameters ---
+    if not pr_number:
+        return [TextContent(type="text", text="Error: pr_number is required.")]
+    if not repo_name:
+        return [TextContent(type="text", text="Error: repo_name is required.")]
+    if action not in ("accept", "reject"):
+        return [TextContent(
+            type="text",
+            text=f"Error: invalid action {action!r}. Must be 'accept' or 'reject'."
+        )]
+
+    # --- Build Atlantis comment body ---
+    if action == "accept":
+        apply_directory = arguments.get("apply_directory")
+        if not apply_directory:
+            return [TextContent(
+                type="text",
+                text="Error: apply_directory is required when action is 'accept'."
+            )]
+        comment_body = f"atlantis apply -d {apply_directory}"
+    else:
+        comment_body = "atlantis unlock"
+
+    logger.info(
+        f"process_provision_decision | pr=#{pr_number} | repo={repo_name} "
+        f"| action={action} | comment={comment_body!r}"
+    )
+    await _send_log(
+        f"PR #{pr_number} ({repo_name}): posting '{comment_body}'", "INFO"
+    )
+
+    # --- Post comment via API ---
+    payload = {
+        "pr_number": pr_number,
+        "comment": comment_body,
+        "repo_name": repo_name,
+    }
+
+    try:
+        result = await api_client.post("/api/github/comments", data=payload)
+
+        comment_id = result.get("id") or result.get("comment_id")
+        logger.info(
+            f"Comment posted successfully | pr=#{pr_number} | comment_id={comment_id}"
+        )
+        await _send_log(f"Comment posted (id={comment_id})", "INFO")
+
+        action_label = "approved (apply triggered)" if action == "accept" else "rejected (lock released)"
+        return [TextContent(
+            type="text",
+            text=(
+                f"**Provision {action_label.title()}**\n\n"
+                f"**PR:** #{pr_number}\n"
+                f"**Repo:** {repo_name}\n"
+                f"**Comment posted:** `{comment_body}`\n"
+                f"**Comment ID:** {comment_id}\n"
+            )
+        )]
+
+    except Exception as e:
+        logger.error(
+            f"process_provision_decision error | pr=#{pr_number} | action={action} | {e}"
+        )
+        return [TextContent(
+            type="text",
+            text=(
+                f"Error posting '{comment_body}' to PR #{pr_number} "
+                f"in {repo_name}: {str(e)}"
+            )
+        )]
 
 
 async def main():

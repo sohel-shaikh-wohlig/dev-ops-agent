@@ -32,6 +32,7 @@ _DEFAULT_PR_ENTRY: Dict[str, Any] = {
     "approved": False,
     "state": "open",
     "last_comment": "",
+    "repo_name": "",
 }
 
 
@@ -184,6 +185,7 @@ class GitHubWebhookService:
 
         entry = await _ensure_pr(pr_number)
         entry["comment_id"] = comment_id
+        entry["repo_name"] = repo_name
         entry["last_comment"] = body[:500]  # truncate for safety
 
         # --- Detect plan result ---

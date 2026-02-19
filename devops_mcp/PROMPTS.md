@@ -163,3 +163,55 @@ Show me the deployment plan for poc-star to dev.
 - Microservice repo: https://github.com/tehvault/poc-star
 - GitOps repo: https://github.com/tehvault/git-ops
 ```
+
+## provision_resource
+
+### Provision a GCS Bucket
+
+```
+Provision a GCS bucket for acme-corp in dev.
+- Client: acme-corp
+- Environment: dev
+- Resource type: gcs
+- Bucket name: acme-corp-dev-assets
+- Terraform repo: git@github.com:org/terraform_devops.git
+```
+
+### Provision a Cloud SQL Instance
+
+```
+Provision a Cloud SQL database for acme-corp in staging.
+- Client: acme-corp
+- Environment: staging
+- Resource type: cloud_sql
+- Instance name: acme-corp-staging-db
+- Tier: db-n1-standard-1
+- Terraform repo: git@github.com:org/terraform_devops.git
+```
+
+### Provision a GKE Cluster
+
+```
+Provision a GKE cluster for acme-corp in production.
+- Client: acme-corp
+- Environment: production
+- Resource type: gke
+- Cluster name: acme-corp-prod-cluster
+- Node count: 3
+- Machine type: e2-standard-4
+- Terraform repo: git@github.com:org/terraform_devops.git
+```
+
+### Natural Language Examples
+
+```
+Provision a GCS bucket named "media-uploads" for client acme-corp in dev using git@github.com:org/terraform_devops.git
+```
+
+```
+Set up a Cloud SQL instance for the acme-corp project in staging environment
+```
+
+```
+Create a new GKE cluster for acme-corp in production with 3 nodes of type e2-standard-4
+```

@@ -96,6 +96,8 @@ class GitHubWebhookController:
             approved=data["approved"],
             state=data["state"],
             last_comment=data["last_comment"],
+            comment_id=data.get("comment_id"),
+            repo_name=data.get("repo_name", ""),
         )
 
     # ------------------------------------------------------------------
