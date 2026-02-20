@@ -1,10 +1,14 @@
 gcp:
   dev:
     project_id: "prj-vaultfy-dev"
-    location: "asia-south1"
+    location: "europe-west3"
+    gcp_service_account_email: "994017094684-compute@developer.gserviceaccount.com"
+    gcp_subnet_name: "projects/prj-vaultfy-non-prod-host/regions/europe-west3/subnetworks/sn-vaultfy-dev-primary"
   prod:
     project_id: "prj-vaultfy-prod"
     location: "europe-west3"  
+    gcp_service_account_email: "994017094684-compute@developer.gserviceaccount.com"
+    gcp_subnet_name: "projects/prj-vaultfy-non-prod-host/regions/europe-west3/subnetworks/sn-vaultfy-dev-primary"
 argocd:
   dev:
     server: "https://argocd-dev.vaultfy.ai"

@@ -22,7 +22,7 @@ import { Cloud, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { ENVIRONMENTS } from "@/shared/constants/environments";
-import { CLIENTS, RESOURCE_TYPES, SERVICE_ACCOUNT_ROLES } from "@/shared/constants/terraform";
+import { CLIENTS, RESOURCE_TYPES, SERVICE_ACCOUNT_ROLES, GCP_IMAGE, GCP_MACHINE_TYPE, GCP_DISK_TYPE } from "@/shared/constants/terraform";
 import { provisionTerraform } from "../services/terraform-service";
 import { WebSocketResponseView } from "./WebSocketResponseView";
 
@@ -36,6 +36,11 @@ interface TerraformConfig {
     serviceAccountName: string;
     serviceAccountRole: string;
     generateKeys: boolean;
+    vmName: string;
+    os: string;
+    diskSize: number;
+    machineType: string;
+    diskType: string;
 }
 
 export function TerraformForm() {
@@ -49,6 +54,11 @@ export function TerraformForm() {
         serviceAccountName: "",
         serviceAccountRole: "",
         generateKeys: false,
+        vmName: "",
+        os: "",
+        diskSize: 20,
+        machineType: "",
+        diskType: "",
     });
 
     const [isLoading, setIsLoading] = useState(false);
@@ -94,12 +104,26 @@ export function TerraformForm() {
             }
         }
 
+        if (config.resourceType === "vm") {
+            if (!config.vmName) {
+                newErrors.vmName = "VM Name is required";
+            }
+            if (!config.os) {
+                newErrors.os = "OS is required";
+            }
+            if (!config.machineType) {
+                newErrors.machineType = "Machine Type is required";
+            }
+            if (config.diskSize <= 0) {
+                newErrors.diskSize = "Disk size must be a positive number";
+            }
+        }
+
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
             return;
         }
 
-        // Clear errors if valid
         // Clear errors if valid
         setErrors({});
         setIsLoading(true);
@@ -117,6 +141,13 @@ export function TerraformForm() {
                     service_account_name: config.serviceAccountName,
                     role: config.serviceAccountRole,
                     generate_keys: config.generateKeys,
+                } : config.resourceType === "vm" ? {
+                    vm_name: config.vmName,
+                    vm_terraform_name: config.vmName?.replace(/-/g, '_'),
+                    os: config.os,
+                    disk_size: config.diskSize,
+                    machine_type: config.machineType,
+                    disk_type: config.diskType,
                 } : {},
             };
 
@@ -127,8 +158,7 @@ export function TerraformForm() {
                 const prNumber = prUrl.split("/").pop();
 
                 if (prNumber && !isNaN(Number(prNumber))) {
-                    // Extract owner and repo from PR URL (e.g., https://github.com/owner/repo/pull/34)
-                    const urlParts = prUrl.split("/"); // ["https:", "", "github.com", "owner", "repo", "pull", "34"]
+                    const urlParts = prUrl.split("/");
                     const repoIndex = urlParts.indexOf("pull") - 1;
                     const ownerIndex = repoIndex - 1;
 
@@ -172,9 +202,22 @@ export function TerraformForm() {
             serviceAccountName: "",
             serviceAccountRole: "",
             generateKeys: false,
+            vmName: "",
+            os: "",
+            diskSize: 20,
+            machineType: "",
+            diskType: "",
         });
         setFormMessage(null);
         setErrors({});
+    };
+
+    const handleVMNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value.replace(/\s+/g, "-");
+        setConfig({ ...config, vmName: value });
+        if (errors.vmName) {
+            setErrors({ ...errors, vmName: "" });
+        }
     };
 
     return showResponseScreen ? (
@@ -262,12 +305,20 @@ export function TerraformForm() {
                                         serviceAccountName: "",
                                         serviceAccountRole: "",
                                         generateKeys: false,
+                                        vmName: "",
+                                        os: "",
+                                        diskSize: 20,
+                                        machineType: "",
                                     });
                                     setFormMessage(null);
                                     if (errors.resourceType) {
                                         const newErrors: Record<string, string> = { ...errors, resourceType: "" };
                                         delete newErrors.bucketName;
                                         delete newErrors.serviceAccountName;
+                                        delete newErrors.vmName;
+                                        delete newErrors.os;
+                                        delete newErrors.diskSize;
+                                        delete newErrors.machineType;
                                         setErrors(newErrors);
                                     }
                                 }}
@@ -403,6 +454,129 @@ export function TerraformForm() {
                                     checked={config.generateKeys}
                                     onCheckedChange={(checked) => setConfig({ ...config, generateKeys: checked })}
                                 />
+                            </div>
+                        </div>
+                    )}
+
+                    {config.resourceType === "vm" && (
+                        <div className="p-4 border rounded-lg bg-muted/20 space-y-4 animate-in fade-in slide-in-from-top-2">
+                            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                                VM Configuration
+                            </h3>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="vmName">VM Name</Label>
+                                    <Input
+                                        id="vmName"
+                                        value={config.vmName}
+                                        onChange={handleVMNameChange}
+                                        placeholder="e.g. web-server-prod"
+                                        className={errors.vmName ? "border-destructive" : ""}
+                                    />
+                                    {errors.vmName && (
+                                        <p className="text-sm text-destructive">{errors.vmName}</p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="os">OS</Label>
+                                    <Select
+                                        value={config.os}
+                                        onValueChange={(val) => {
+                                            setConfig({ ...config, os: val });
+                                            if (errors.os) setErrors({ ...errors, os: "" });
+                                        }}
+                                    >
+                                        <SelectTrigger id="os" className={errors.os ? "border-destructive" : ""}>
+                                            <SelectValue placeholder="Select OS" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {GCP_IMAGE.map((image) => (
+                                                <SelectItem key={image.key} value={image.key}>
+                                                    {image.value}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.os && (
+                                        <p className="text-sm text-destructive">{errors.os}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="diskSize">Disk Size (GB)</Label>
+                                    <Input
+                                        id="diskSize"
+                                        type="number"
+                                        value={config.diskSize}
+                                        onChange={(e) => {
+                                            setConfig({ ...config, diskSize: Number(e.target.value) });
+                                            if (errors.diskSize) setErrors({ ...errors, diskSize: "" });
+                                        }}
+                                        placeholder="e.g. 20"
+                                        className={errors.diskSize ? "border-destructive" : ""}
+                                    />
+                                    {errors.diskSize && (
+                                        <p className="text-sm text-destructive">{errors.diskSize}</p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="diskType">Disk Type</Label>
+                                    <Select
+                                        value={config.diskType}
+                                        onValueChange={(val) => {
+                                            setConfig({ ...config, diskType: val });
+                                            if (errors.diskType) setErrors({ ...errors, diskType: "" });
+                                        }}
+                                    >
+                                        <SelectTrigger id="diskType" className={errors.diskType ? "border-destructive" : ""}>
+                                            <SelectValue placeholder="Select disk type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {GCP_DISK_TYPE.map((type) => (
+                                                <SelectItem key={type.key} value={type.key}>
+                                                    {type.value}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.diskType && (
+                                        <p className="text-sm text-destructive">{errors.diskType}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="machineType">Machine Type</Label>
+                                    <Select
+                                        value={config.machineType}
+                                        onValueChange={(val) => {
+                                            setConfig({ ...config, machineType: val });
+                                            if (errors.machineType) setErrors({ ...errors, machineType: "" });
+                                        }}
+                                    >
+                                        <SelectTrigger id="machineType" className={errors.machineType ? "border-destructive" : ""}>
+                                            <SelectValue placeholder="Select machine type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {GCP_MACHINE_TYPE.map((type) => (
+                                                <SelectItem key={type.key} value={type.key}>
+                                                    {type.value}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.machineType && (
+                                        <p className="text-sm text-destructive">{errors.machineType}</p>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}

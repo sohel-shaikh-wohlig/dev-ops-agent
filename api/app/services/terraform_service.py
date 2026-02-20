@@ -242,6 +242,21 @@ class TerraformService:
             "project_location", env_cfg.get("location")
         )
         project_id = env_cfg.get("project_id")
+        
+        gcp_service_account_email = env_cfg.get("gcp_service_account_email")
+        gcp_subnet_name = env_cfg.get("gcp_subnet_name")
+        
+        if not gcp_service_account_email:
+            raise KeyError(
+                f"'gcp_service_account_email' missing from client config for "
+                f"environment '{request.environment}'"
+            )
+
+        if not gcp_subnet_name:
+            raise KeyError(
+                f"'gcp_subnet_name' missing from client config for "
+                f"environment '{request.environment}'"
+            )
 
         if not project_id:
             raise KeyError(
@@ -264,6 +279,8 @@ class TerraformService:
             "{{environment}}": request.environment,
             "{{project_id}}": str(project_id),
             "{{project_location}}": str(project_location),
+            "{{gcp_service_account_email}}": str(gcp_service_account_email),
+            "{{gcp_subnet_name}}": str(gcp_subnet_name),
         }
 
         # Add every key from resource_config as a placeholder
