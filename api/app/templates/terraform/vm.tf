@@ -48,7 +48,7 @@ resource "google_compute_instance" "{{vm_terraform_name}}" {
 
     queue_count = 0
     stack_type  = "IPV4_ONLY"
-    subnetwork  = "{{subnet_name}}"
+    subnetwork  = "{{gcp_subnet_name}}"
   }
 
   scheduling {
