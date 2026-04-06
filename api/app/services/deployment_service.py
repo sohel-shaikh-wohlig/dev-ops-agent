@@ -29,6 +29,21 @@ from app.models.gitops import (
 
 settings = get_settings()
 
+
+def _get_head_commit_hash(repo_dir: Path) -> Optional[str]:
+    """Return the current HEAD commit hash for *repo_dir*, or None on failure."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=repo_dir, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip()
+    except Exception as exc:
+        logger.warning(f"Could not read HEAD commit hash from {repo_dir}: {exc}")
+        return None
+
+
 # Constants
 HEALTH_POLL_INTERVAL = 10  # seconds between health checks
 HEALTH_POLL_TIMEOUT = 300  # 5 minutes max wait time
@@ -711,11 +726,19 @@ class DeploymentService:
         if not success:
             if "nothing to commit" in str(error).lower():
                 logger.info("✓ No workflow changes to commit")
-                return None
             else:
                 raise Exception(f"Failed to commit workflow changes: {error}")
 
-        logger.info(f"✓ Workflow changes committed with hash: {workflow_commit_hash}")
+        # workflow_commit_hash may be None when commit_changes found nothing
+        # staged (returns True, None, None). Fall back to current HEAD so the
+        # GitHub Actions monitor always has a valid sha.
+        if not workflow_commit_hash:
+            workflow_commit_hash = await asyncio.to_thread(
+                _get_head_commit_hash, ms_git_root
+            )
+            logger.info(f"Using existing HEAD commit hash: {workflow_commit_hash}")
+        else:
+            logger.info(f"✓ Workflow changes committed with hash: {workflow_commit_hash}")
 
         success, error = await asyncio.to_thread(git_service.push_changes, ms_git_root)
         if not success:
@@ -769,12 +792,17 @@ class DeploymentService:
         # Wait for GitHub Action to start
         await asyncio.sleep(10)
 
-        # Construct GitHub API URL
-        github_action_domain = request.microservice_url.rstrip('/')
-        github_action_domain = github_action_domain.replace(
-            "https://github.com/",
-            "https://api.github.com/repos/"
-        )
+        # Construct GitHub API URL (supports both HTTPS and SSH remote URLs)
+        raw_url = request.microservice_url.rstrip('/')
+        raw_url = raw_url.removesuffix('.git')
+        if raw_url.startswith("git@"):
+            # git@github.com:org/repo  ->  org/repo
+            owner_repo = raw_url.split(":", 1)[-1]
+        else:
+            # https://github.com/org/repo  ->  org/repo
+            parts = raw_url.split("github.com/", 1)
+            owner_repo = parts[-1] if len(parts) == 2 else raw_url
+        github_action_domain = f"https://api.github.com/repos/{owner_repo}"
 
         github_headers = {
             "Accept": "application/vnd.github.v3+json",

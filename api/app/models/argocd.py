@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 
 from app.models.common import HealthStatus, MetadataModel, RepositoryType, SyncStatus
@@ -14,6 +14,14 @@ class CreateApplicationRequest(BaseModel):
     target_revision: str = Field("HEAD", description="Target revision (branch/tag/commit)")
     destination_server: str = Field("https://kubernetes.default.svc", description="Kubernetes server")
     destination_namespace: str = Field("default", description="Target namespace")
+
+    @field_validator("name", "project", "repo_url", "path", "target_revision",
+                     "destination_server", "destination_namespace", mode="before")
+    @classmethod
+    def strip_whitespace(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return v.strip()
+        return v
     
     # Optional Helm configuration
     chart: Optional[str] = Field(None, description="Helm chart name")

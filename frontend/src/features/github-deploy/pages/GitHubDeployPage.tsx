@@ -87,7 +87,7 @@ export default function GitHubDeployPage() {
         message: string;
     } | null>(null);
 
-    const fullUrl = `${ENV_CONFIG.GITHUB_BASE_URL.replace(/\/+$/, "")}/${repoPath}`;
+    const fullUrl = repoPath.includes("git@github.com") ? repoPath : `${ENV_CONFIG.GITHUB_BASE_URL.replace(/\/+$/, "")}/${repoPath}`;
 
     const validateForm = (): boolean => {
         const newErrors: FormErrors = {};
@@ -111,7 +111,8 @@ export default function GitHubDeployPage() {
             return;
         }
 
-        const microserviceName = repoPath; // Assuming repoPath is the name as per instructions
+        const extractedName = repoPath.includes("/") ? repoPath.split("/").pop() || repoPath : repoPath;
+        const microserviceName = extractedName.replace(/\.git$/, "");
         const gitBranch = selectedEnv;
 
         setConfig({
@@ -553,7 +554,7 @@ export default function GitHubDeployPage() {
                                     id="githubUrl"
                                     type="text"
                                     // Combine base URL + repo path
-                                    value={`${ENV_CONFIG.GITHUB_BASE_URL.replace(/\/+$/, "")}/${repoPath}`}
+                                    value={fullUrl}
                                     onChange={(e) => {
                                         // Extract only the repo path part (everything after the base URL)
                                         const fullValue = e.target.value;

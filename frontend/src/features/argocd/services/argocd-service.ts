@@ -11,6 +11,17 @@ export const fetchApplicationDetails = async (appName: string): Promise<ArgoCDDe
     return response;
 };
 
+export const createApplication = async (
+    request: import("../types").CreateApplicationRequest,
+    env?: string
+) => {
+    let endpoint = '/argocd/applications';
+    if (env) {
+        endpoint += `?env=${env}`;
+    }
+    return apiClient.post<{ message?: string; }>(endpoint, request);
+};
+
 // Helper to map API response to Deployment type expected by DeploymentCard
 export const mapArgoCDAppToDeployment = (app: ArgoCDApplication): Deployment => {
     return {

@@ -51,6 +51,27 @@ class GitUtilitiesService:
         return git_url
 
     @staticmethod
+    def _https_to_ssh(https_url: str) -> Optional[str]:
+        """
+        Convert an HTTPS GitHub URL to its SSH equivalent.
+
+        e.g. https://github.com/org/repo  ->  git@github.com:org/repo.git
+
+        Returns None if the URL cannot be converted.
+        """
+        try:
+            url = https_url.split("@")[-1] if "@" in https_url else https_url
+            url = url.removeprefix("https://").removeprefix("http://")
+            parts = url.rstrip("/").removesuffix(".git").split("/")
+            if len(parts) < 3:
+                return None
+            host = parts[0]
+            owner_repo = "/".join(parts[1:3])
+            return f"git@{host}:{owner_repo}.git"
+        except Exception:
+            return None
+
+    @staticmethod
     def clone_repository(
         git_url: str,
         target_dir: Path,
@@ -81,28 +102,37 @@ class GitUtilitiesService:
             clone_url = GitUtilitiesService._build_clone_url(git_url)
             logger.info(f"Cloning repository: {git_url} to {target_dir}")
 
-            # Try to clone with specific branch
-            result = subprocess.run(
-                ['git', 'clone', '--branch', branch, '--depth', str(depth), clone_url, str(target_dir)],
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minutes timeout
-            )
+            def _try_clone(url: str) -> "subprocess.CompletedProcess[str]":
+                """Attempt clone with branch, then without branch."""
+                res = subprocess.run(
+                    ['git', 'clone', '--branch', branch, '--depth', str(depth), url, str(target_dir)],
+                    capture_output=True, text=True, timeout=300,
+                )
+                if res.returncode != 0:
+                    logger.warning(f"Branch '{branch}' not found for {url}, trying default branch")
+                    if target_dir.exists():
+                        shutil.rmtree(target_dir)
+                    res = subprocess.run(
+                        ['git', 'clone', '--depth', str(depth), url, str(target_dir)],
+                        capture_output=True, text=True, timeout=300,
+                    )
+                return res
+
+            result = _try_clone(clone_url)
+
+            if result.returncode != 0 and git_url.startswith("https://"):
+                # HTTPS failed — retry with SSH equivalent
+                ssh_url = GitUtilitiesService._https_to_ssh(git_url)
+                if ssh_url:
+                    logger.warning(
+                        f"HTTPS clone failed, retrying with SSH: {ssh_url}"
+                    )
+                    result = _try_clone(ssh_url)
 
             if result.returncode != 0:
-                # Try without branch specification (might not exist)
-                logger.warning(f"Branch {branch} not found, trying default branch")
-                result = subprocess.run(
-                    ['git', 'clone', '--depth', str(depth), clone_url, str(target_dir)],
-                    capture_output=True,
-                    text=True,
-                    timeout=300
-                )
-
-                if result.returncode != 0:
-                    error_msg = result.stderr or "Unknown error during clone"
-                    logger.error(f"Git clone failed: {error_msg}")
-                    return False, error_msg
+                error_msg = result.stderr or "Unknown error during clone"
+                logger.error(f"Git clone failed: {error_msg}")
+                return False, error_msg
 
             logger.info(f"Repository cloned successfully to {target_dir}")
             return True, None

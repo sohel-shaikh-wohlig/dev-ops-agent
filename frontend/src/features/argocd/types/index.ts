@@ -9,6 +9,19 @@ export interface ArgoCDApplication {
     created_at: string;
 }
 
+export interface CreateApplicationRequest {
+    name: string;
+    project?: string;
+    repo_url: string;
+    path?: string;
+    target_revision?: string;
+    destination_namespace?: string;
+    auto_sync?: boolean;
+    auto_prune?: boolean;
+    self_heal?: boolean;
+}
+
+
 export interface ArgoCDResource {
     kind: string;
     name: string;
