@@ -291,7 +291,10 @@ export default function GitHubDeployPage() {
                             </div>
                             <div className="space-y-2">
                                 <Label>Microservice Name</Label>
-                                <Input value={config.microserviceName} disabled />
+                                <Input
+                                    value={config.microserviceName}
+                                    onChange={(e) => setConfig({ ...config, microserviceName: e.target.value })}
+                                />
                             </div>
                         </div>
 
@@ -322,7 +325,10 @@ export default function GitHubDeployPage() {
                             </div>
                             <div className="space-y-2">
                                 <Label>Git Repo Name</Label>
-                                <Input value={config.gitRepoName} disabled />
+                                <Input
+                                    value={config.gitRepoName}
+                                    onChange={(e) => setConfig({ ...config, gitRepoName: e.target.value })}
+                                />
                             </div>
                         </div>
 
