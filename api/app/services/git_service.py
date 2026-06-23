@@ -6,14 +6,15 @@ Based on original script's git functionality
 import os
 import subprocess
 import shutil
+import json
 from pathlib import Path
 from typing import Dict, Optional, Tuple, List
 
-import httpx
 from fastapi import HTTPException, status
 
 from app.core.logging_config import logger
 from app.core.config import get_settings
+from app.utils.gh_cli import run_gh
 
 
 class GitUtilitiesService:
@@ -507,6 +508,21 @@ class GitUtilitiesService:
             return False, error_msg, None
 
     @staticmethod
+    def repository_secrets_exist(owner: str, repo: str) -> bool:
+        """Check if a GitHub repository already has any Actions secrets set."""
+        repo_full_name = f"{owner}/{repo}"
+        try:
+            result = subprocess.run(
+                ['gh', 'secret', 'list', '-R', repo_full_name],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            return result.returncode == 0 and bool(result.stdout.strip())
+        except Exception:
+            return False
+
+    @staticmethod
     def create_repository_secrets(
         secrets_file: Path,
         owner: str,
@@ -662,42 +678,22 @@ class GitUtilitiesService:
                 parts = repo_clean.split("/")
                 repo_name = f"{parts[-2]}/{parts[-1]}"
 
-        settings = get_settings()
-        url = f"https://api.github.com/repos/{repo_name}/issues/comments/{comment_id}"
-        headers = {
-            "Accept": "application/vnd.github.v3+json",
-            "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
-        }
-
         logger.info(f"Fetching comment {comment_id} from {repo_name}")
 
+        # gh api repos/{repo}/issues/comments/{id}
+        result = await run_gh(
+            ["api", f"repos/{repo_name}/issues/comments/{comment_id}"],
+            repo=repo_name,
+            timeout=30,
+        )
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, headers=headers, timeout=30)
-        except httpx.HTTPError as exc:
-            logger.error(f"GitHub API request failed for comment {comment_id}: {exc}")
+            return json.loads(result.stdout)
+        except json.JSONDecodeError:
+            logger.error(f"gh api: non-JSON response for comment {comment_id}")
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to reach GitHub API: {exc}",
+                detail="GitHub API returned non-JSON response",
             )
-
-        if response.status_code == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Comment {comment_id} not found in {repo_name}",
-            )
-
-        if response.status_code != 200:
-            logger.error(
-                f"GitHub API error for comment {comment_id}: "
-                f"{response.status_code} {response.text}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"GitHub API returned {response.status_code}",
-            )
-
-        return response.json()
 
     @staticmethod
     async def post_pr_comment(
@@ -736,46 +732,30 @@ class GitUtilitiesService:
                 parts = repo_clean.split("/")
                 repo_name = f"{parts[-2]}/{parts[-1]}"
 
-        settings = get_settings()
-        url = f"https://api.github.com/repos/{repo_name}/issues/{pr_number}/comments"
-        headers = {
-            "Accept": "application/vnd.github.v3+json",
-            "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
-        }
-        payload = {"body": comment}
-
         logger.info(f"Posting comment on PR #{pr_number} in {repo_name}")
 
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    url, headers=headers, json=payload, timeout=30
-                )
-        except httpx.HTTPError as exc:
-            logger.error(f"GitHub API request failed for PR #{pr_number}: {exc}")
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to reach GitHub API: {exc}",
-            )
-
-        if response.status_code == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"PR #{pr_number} not found in {repo_name}",
-            )
-
-        if response.status_code not in (200, 201):
-            logger.error(
-                f"GitHub API error for PR #{pr_number}: "
-                f"{response.status_code} {response.text}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"GitHub API returned {response.status_code}",
-            )
+        # gh pr comment {pr} -R {repo} --body-file - (stdin avoids shell-escaping)
+        result = await run_gh(
+            [
+                "pr", "comment", str(pr_number),
+                "-R", repo_name,
+                "--body-file", "-",
+            ],
+            stdin=comment,
+            repo=repo_name,
+            timeout=30,
+        )
 
         logger.info(f"Comment posted on PR #{pr_number} in {repo_name}")
-        return response.json()
+
+        # gh pr comment outputs the comment URL on stdout; return a dict
+        # with the URL so callers that expect a response dict still work.
+        comment_url = result.stdout.strip()
+        return {
+            "url": comment_url,
+            "pr_number": pr_number,
+            "repo": repo_name,
+        }
 
     @staticmethod
     async def merge_pull_request(
@@ -834,62 +814,30 @@ class GitUtilitiesService:
                 parts = repo_clean.split("/")
                 repo_name = f"{parts[-2]}/{parts[-1]}"
 
-        settings = get_settings()
-        url = f"https://api.github.com/repos/{repo_name}/pulls/{pull_number}/merge"
-        headers = {
-            "Accept": "application/vnd.github.v3+json",
-            "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
-        }
-        payload = {
-            "commit_title": commit_title,
-            "commit_message": commit_message,
-            "merge_method": merge_method,
-        }
-
         logger.info(
             f"Merging PR #{pull_number} in {repo_name} "
             f"(method={merge_method})"
         )
 
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.put(
-                    url, headers=headers, json=payload, timeout=30
-                )
-        except httpx.HTTPError as exc:
-            logger.error(f"GitHub API request failed for PR #{pull_number} merge: {exc}")
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to reach GitHub API: {exc}",
-            )
-
-        status_handlers = {
-            404: f"PR #{pull_number} not found in {repo_name}",
-            405: f"PR #{pull_number} is not mergeable (already merged or checks pending)",
-            409: f"PR #{pull_number} has a merge conflict and cannot be merged",
-            422: f"GitHub rejected the merge request for PR #{pull_number}: {response.text}",
-        }
-
-        if response.status_code in status_handlers:
-            detail = status_handlers[response.status_code]
-            logger.error(detail)
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=detail,
-            )
-
-        if response.status_code != 200:
-            logger.error(
-                f"GitHub API error merging PR #{pull_number}: "
-                f"{response.status_code} {response.text}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"GitHub API returned {response.status_code}",
-            )
+        # gh pr merge {pr} -R {repo} --{method} --subject "..." --body "..."
+        result = await run_gh(
+            [
+                "pr", "merge", str(pull_number),
+                "-R", repo_name,
+                f"--{merge_method}",
+                "--subject", commit_title,
+                "--body", commit_message,
+            ],
+            repo=repo_name,
+            timeout=30,
+        )
 
         logger.info(f"PR #{pull_number} merged successfully in {repo_name}")
-        return response.json()
+        return {
+            "sha": result.stdout.strip() or None,
+            "merged": True,
+            "message": f"Pull request #{pull_number} merged ({merge_method})",
+        }
 
     @staticmethod
     async def delete_branch(
@@ -930,41 +878,17 @@ class GitUtilitiesService:
                 parts = repo_clean.split("/")
                 repo_name = f"{parts[-2]}/{parts[-1]}"
 
-        settings = get_settings()
-        url = f"https://api.github.com/repos/{repo_name}/git/refs/heads/{branch_name}"
-        headers = {
-            "Accept": "application/vnd.github.v3+json",
-            "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
-        }
-
         logger.info(f"Deleting branch '{branch_name}' from {repo_name}")
 
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.delete(url, headers=headers, timeout=30)
-        except httpx.HTTPError as exc:
-            logger.error(f"GitHub API request failed deleting branch '{branch_name}': {exc}")
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to reach GitHub API: {exc}",
-            )
-
-        if response.status_code == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Branch '{branch_name}' not found in {repo_name}",
-            )
-
-        # GitHub returns 204 No Content on successful branch deletion
-        if response.status_code != 204:
-            logger.error(
-                f"GitHub API error deleting branch '{branch_name}': "
-                f"{response.status_code} {response.text}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"GitHub API returned {response.status_code}",
-            )
+        # gh api -X DELETE repos/{repo}/git/refs/heads/{branch}
+        await run_gh(
+            [
+                "api", "-X", "DELETE",
+                f"repos/{repo_name}/git/refs/heads/{branch_name}",
+            ],
+            repo=repo_name,
+            timeout=30,
+        )
 
         logger.info(f"Branch '{branch_name}' deleted successfully from {repo_name}")
         return {"branch": branch_name, "deleted": True}
@@ -1010,55 +934,22 @@ class GitUtilitiesService:
                 parts = repo_clean.split("/")
                 repo_name = f"{parts[-2]}/{parts[-1]}"
 
-        settings = get_settings()
-        url = f"https://api.github.com/repos/{repo_name}/pulls/{pull_number}"
-        headers = {
-            "Accept": "application/vnd.github.v3+json",
-            "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
-        }
-        payload = {"state": "closed"}
-
         logger.info(f"Closing PR #{pull_number} in {repo_name}")
 
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.patch(
-                    url, headers=headers, json=payload, timeout=30
-                )
-        except httpx.HTTPError as exc:
-            logger.error(f"GitHub API request failed closing PR #{pull_number}: {exc}")
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to reach GitHub API: {exc}",
-            )
+        # gh pr close {pr} -R {repo}
+        await run_gh(
+            [
+                "pr", "close", str(pull_number),
+                "-R", repo_name,
+            ],
+            repo=repo_name,
+            timeout=30,
+        )
 
-        if response.status_code == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"PR #{pull_number} not found in {repo_name}",
-            )
-
-        if response.status_code == 422:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"GitHub rejected close request for PR #{pull_number}: {response.text}",
-            )
-
-        if response.status_code != 200:
-            logger.error(
-                f"GitHub API error closing PR #{pull_number}: "
-                f"{response.status_code} {response.text}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"GitHub API returned {response.status_code}",
-            )
-
-        data = response.json()
         logger.info(f"PR #{pull_number} closed successfully in {repo_name}")
         return {
             "pull_number": pull_number,
-            "state": data.get("state"),
+            "state": "closed",
             "closed": True,
         }
 

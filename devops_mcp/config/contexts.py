@@ -6,6 +6,7 @@ Maps environments to kubectl contexts
 CLUSTER_CONTEXTS = {
     "dev": "dev",
     "development": "dev",
+    "test": "test",
     "staging": "staging",
     "stage": "staging",
     "production": "production",

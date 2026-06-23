@@ -54,6 +54,7 @@ class MCPSettings(BaseSettings):
     # ========== Cluster Mappings ==========
     # Override these with environment variables if needed
     CLUSTER_DEV: str = "dev"
+    CLUSTER_TEST: str = "test"
     CLUSTER_STAGING: str = "staging"
     CLUSTER_PRODUCTION: str = "production"
     CLUSTER_QA: str = "qa"
@@ -86,6 +87,7 @@ class MCPSettings(BaseSettings):
         return {
             "dev": self.CLUSTER_DEV,
             "development": self.CLUSTER_DEV,
+            "test": self.CLUSTER_TEST,
             "staging": self.CLUSTER_STAGING,
             "stage": self.CLUSTER_STAGING,
             "production": self.CLUSTER_PRODUCTION,
@@ -154,6 +156,7 @@ MCP_API_TOKEN=your_api_token_here
 
 # Kubernetes Contexts
 MCP_CLUSTER_DEV=dev
+MCP_CLUSTER_TEST=test
 MCP_CLUSTER_STAGING=staging
 MCP_CLUSTER_PRODUCTION=production
 MCP_CLUSTER_QA=qa

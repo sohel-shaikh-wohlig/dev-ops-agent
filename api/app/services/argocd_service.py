@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 SUPPORTED_ENVIRONMENTS: Dict[str, str] = {
     "dev": "_DEV",
     "development": "_DEV",
+    "test": "_TEST",
     "uat": "_UAT",
     "staging": "_STAGING",
     "prod": "_PROD",
@@ -54,6 +55,7 @@ class ArgoCDService:
 
     Supports dynamic environment selection via the 'env' parameter:
     - env='dev' or 'development': Uses ARGOCD_SERVER_DEV, ARGOCD_USERNAME_DEV, etc.
+    - env='test': Uses ARGOCD_SERVER_TEST, ARGOCD_USERNAME_TEST, etc.
     - env='uat': Uses ARGOCD_SERVER_UAT, ARGOCD_USERNAME_UAT, etc.
     - env='staging': Uses ARGOCD_SERVER_STAGING, ARGOCD_USERNAME_STAGING, etc.
     - env='prod' or 'production': Uses ARGOCD_SERVER_PROD, ARGOCD_USERNAME_PROD, etc.
@@ -551,7 +553,7 @@ class ArgoCDService:
         include_summary: bool = True
     ) -> List[Dict[str, Any]]:
         """List all applications"""
-        apps = self._execute_with_retry(self.client.list_applications, project)
+        apps = self._execute_with_retry(self.client.list_applications, project) or []
 
         if include_summary:
             return [extract_application_summary(app) for app in apps]

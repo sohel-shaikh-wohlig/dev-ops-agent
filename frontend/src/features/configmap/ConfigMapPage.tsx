@@ -359,6 +359,7 @@ export function ConfigMapPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="dev">Dev</SelectItem>
+                      <SelectItem value="test">Test</SelectItem>
                       <SelectItem value="uat">Stage</SelectItem>
                       <SelectItem value="prod">Prod</SelectItem>
                     </SelectContent>
@@ -447,6 +448,7 @@ export function ConfigMapPage() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="dev">Dev</SelectItem>
+                              <SelectItem value="test">Test</SelectItem>
                               <SelectItem value="uat">Stage</SelectItem>
                               <SelectItem value="prod">Prod</SelectItem>
                             </SelectContent>

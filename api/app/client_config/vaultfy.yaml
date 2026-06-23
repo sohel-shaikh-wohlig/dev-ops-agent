@@ -4,17 +4,25 @@ gcp:
     location: "europe-west3"
     gcp_service_account_email: "994017094684-compute@developer.gserviceaccount.com"
     gcp_subnet_name: "projects/prj-vaultfy-non-prod-host/regions/europe-west3/subnetworks/sn-vaultfy-dev-primary"
+  test:
+    project_id: "prj-vaultfy-test-499007"
+    location: "europe-west3"
+    gcp_service_account_email: "994017094684-compute@developer.gserviceaccount.com"
+    gcp_subnet_name: "projects/prj-vaultfy-non-prod-host/regions/europe-west3/subnetworks/sn-vaultfy-test-primary"
   prod:
     project_id: "prj-vaultfy-prod"
-    location: "europe-west3"  
+    location: "europe-west3"
     gcp_service_account_email: "994017094684-compute@developer.gserviceaccount.com"
-    gcp_subnet_name: "projects/prj-vaultfy-non-prod-host/regions/europe-west3/subnetworks/sn-vaultfy-dev-primary"
+    gcp_subnet_name: "projects/prj-vaultfy-non-prod-host/regions/europe-west3/subnetworks/sn-vaultfy-prod-primary"
 argocd:
   dev:
     server: "https://argocd-dev.vaultfy.ai"
     username: "admin"
+  test:
+    server: "https://argocd-test.vaultfy.ai"
+    username: "admin"
   prod:
-    server: "https://argocd-prod.vaultfy.ai"
+    server: "https://argocd.vaultfy.ai"
     username: "admin"
 github:
   webhook_secret: ""

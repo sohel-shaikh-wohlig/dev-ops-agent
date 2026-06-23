@@ -10,6 +10,10 @@ DevOps Automation Platform for managing microservice deployments via ArgoCD, Git
 - **frontend/** - React + TypeScript web dashboard (see `frontend/CLAUDE.md` for details)
 - **devops_mcp/** - MCP (Model Context Protocol) servers for Claude Desktop integration
 
+**Runtime Dependencies (backend host):**
+- `git` CLI — for clone/commit/push operations
+- `gh` CLI — for GitHub API operations (comments, merges, branches, workflow monitoring). Must be authenticated via `GH_TOKEN` env var or `gh auth login`.
+
 ## Development Commands
 
 ### Backend (FastAPI)

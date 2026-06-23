@@ -20,6 +20,7 @@ from app.core.redis import redis_manager
 from app.core.websocket_manager import ws_manager
 from app.routes.websocket import ws_router
 from app.utils.cleanup import cleanup_old_sessions
+from app.utils.gh_cli import check_gh_cli, check_gh_auth
 
 
 # Setup logging
@@ -40,6 +41,12 @@ async def lifespan(app: FastAPI):
     settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     await redis_manager.connect()
     await pubsub_subscriber.start()
+
+    # Verify gh CLI is installed and authenticated
+    if not check_gh_cli():
+        logger.warning("⚠ gh CLI not found — GitHub operations (comments, merges, workflow monitoring) will fail")
+    elif not check_gh_auth():
+        logger.warning("⚠ gh CLI not authenticated — set GH_TOKEN env var or run `gh auth login`")
 
     yield
 

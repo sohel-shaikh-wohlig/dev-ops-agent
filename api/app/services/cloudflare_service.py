@@ -4,6 +4,7 @@ A service class to interact with Cloudflare API with environment-aware Load Bala
 
 Supports dynamic environment selection for Load Balancer IPs:
 - env='dev' or 'development': Uses LOAD_BALANCER_IP_DEV
+- env='test': Uses LOAD_BALANCER_IP_TEST
 - env='uat': Uses LOAD_BALANCER_IP_UAT
 - env='staging': Uses LOAD_BALANCER_IP_STAGING
 - env='prod' or 'production': Uses LOAD_BALANCER_IP_PROD
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 SUPPORTED_ENVIRONMENTS: Dict[str, str] = {
     "dev": "_DEV",
     "development": "_DEV",
+    "test": "_TEST",
     "uat": "_UAT",
     "staging": "_STAGING",
     "prod": "_PROD",
@@ -312,7 +314,18 @@ class CloudflareService:
 
             if not data.get("success"):
                 errors = [err.get("message", "Unknown error") for err in data.get("errors", [])]
-                raise ValueError(f"Cloudflare API Error: {', '.join(errors)}")
+                error_msg = ', '.join(errors)
+
+                # If an identical record already exists, treat as success (idempotent)
+                if "identical record already exists" in error_msg.lower():
+                    logger.info(f"DNS record '{record_data.name}' already exists — skipping creation")
+                    return {
+                        "success": True,
+                        "record": None,
+                        "message": f"DNS record '{record_data.name}' already exists — skipped"
+                    }
+
+                raise ValueError(f"Cloudflare API Error: {error_msg}")
 
             return {
                 "success": True,
@@ -471,7 +484,18 @@ class CloudflareService:
 
             if not data.get("success"):
                 errors = [err.get("message", "Unknown error") for err in data.get("errors", [])]
-                raise ValueError(f"Cloudflare API Error: {', '.join(errors)}")
+                error_msg = ', '.join(errors)
+
+                # If an identical record already exists, treat as success (idempotent)
+                if "identical record already exists" in error_msg.lower():
+                    logger.info(f"DNS record '{record_data.name}' already exists — skipping creation")
+                    return {
+                        "success": True,
+                        "record": None,
+                        "message": f"DNS record '{record_data.name}' already exists — skipped"
+                    }
+
+                raise ValueError(f"Cloudflare API Error: {error_msg}")
 
             return {
                 "success": True,

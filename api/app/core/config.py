@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     # environment, add the corresponding _SUFFIX settings:
     #   - Default: ARGOCD_SERVER, ARGOCD_USERNAME, ARGOCD_PASSWORD, ARGOCD_TOKEN
     #   - DEV:     ARGOCD_SERVER_DEV, ARGOCD_USERNAME_DEV, etc.
+    #   - TEST:    ARGOCD_SERVER_TEST, ARGOCD_USERNAME_TEST, etc.
     #   - UAT:     ARGOCD_SERVER_UAT, ARGOCD_USERNAME_UAT, etc.
     #   - STAGING: ARGOCD_SERVER_STAGING, ARGOCD_USERNAME_STAGING, etc.
     #   - PROD:    ARGOCD_SERVER_PROD, ARGOCD_USERNAME_PROD, etc.
@@ -54,6 +55,12 @@ class Settings(BaseSettings):
     ARGOCD_TOKEN_DEV: Optional[str] = Field(None, description="ArgoCD token for DEV")
     ARGOCD_USERNAME_DEV: Optional[str] = Field(None, description="ArgoCD username for DEV")
     ARGOCD_PASSWORD_DEV: Optional[str] = Field(None, description="ArgoCD password for DEV")
+
+    # TEST Environment ArgoCD Configuration
+    ARGOCD_SERVER_TEST: Optional[str] = Field(None, description="ArgoCD server URL for TEST")
+    ARGOCD_TOKEN_TEST: Optional[str] = Field(None, description="ArgoCD token for TEST")
+    ARGOCD_USERNAME_TEST: Optional[str] = Field(None, description="ArgoCD username for TEST")
+    ARGOCD_PASSWORD_TEST: Optional[str] = Field(None, description="ArgoCD password for TEST")
 
     # UAT Environment ArgoCD Configuration
     ARGOCD_SERVER_UAT: Optional[str] = Field(None, description="ArgoCD server URL for UAT")
@@ -136,6 +143,7 @@ class Settings(BaseSettings):
     # For each environment, add the corresponding _SUFFIX settings:
     #   - Default: LOAD_BALANCER_IP
     #   - DEV:     LOAD_BALANCER_IP_DEV
+    #   - TEST:    LOAD_BALANCER_IP_TEST
     #   - UAT:     LOAD_BALANCER_IP_UAT
     #   - STAGING: LOAD_BALANCER_IP_STAGING
     #   - PROD:    LOAD_BALANCER_IP_PROD
@@ -146,6 +154,9 @@ class Settings(BaseSettings):
 
     # DEV Environment Load Balancer IP
     LOAD_BALANCER_IP_DEV: Optional[str] = Field(None, description="Load balancer IP for DEV environment")
+
+    # TEST Environment Load Balancer IP
+    LOAD_BALANCER_IP_TEST: Optional[str] = Field(None, description="Load balancer IP for TEST environment")
 
     # UAT Environment Load Balancer IP
     LOAD_BALANCER_IP_UAT: Optional[str] = Field(None, description="Load balancer IP for UAT environment")

@@ -35,6 +35,8 @@ The application uses `.env.development` or `.env.uat` files for configuration. K
 - `SESSION_EXPIRY_HOURS`: Hours before sessions expire
 - `SESSION_CLEANUP_INTERVAL_HOURS`: Interval for cleaning expired sessions
 - `CLOUDFLARE_API_TOKEN`: Cloudflare API token (for DNS operations)
+- `GH_TOKEN`: GitHub CLI token (automatically read by `gh` CLI; can be same as `GITHUB_TOKEN`)
+- `gh` CLI must be installed and authenticated on the backend host
 
 ## Architecture
 
@@ -101,6 +103,8 @@ app/
 **Streaming Logs**: The `LogStreamHandler` in `log_stream.py` uses context variables to stream logs to specific requests via Server-Sent Events (NDJSON format).
 
 **Session Management**: `SessionManager` handles preview/apply workflows by storing session state both in memory and on disk for persistence.
+
+**GitHub CLI (gh)**: All GitHub API operations (comments, merges, branch deletion, PR close, workflow monitoring) use the `gh` CLI via `app/utils/gh_cli.py` subprocess wrapper, not direct REST API calls. This centralises authentication (via `GH_TOKEN`) and rate-limit handling through `gh`. Git clone/commit/push still use the `git` CLI directly.
 
 ## API Documentation
 

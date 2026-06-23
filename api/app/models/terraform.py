@@ -78,7 +78,7 @@ class TerraformProvisionRequest(BaseModel):
     @validator("environment")
     def validate_environment(cls, v: str) -> str:
         v = v.strip().lower()
-        allowed = {"dev", "staging", "production", "qa", "uat"}
+        allowed = {"dev", "test", "staging", "production", "qa", "uat"}
         if v not in allowed:
             raise ValueError(
                 f"environment must be one of: {', '.join(sorted(allowed))}"

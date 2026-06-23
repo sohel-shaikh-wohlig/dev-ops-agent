@@ -54,6 +54,9 @@ class GitOpsTemplateService:
     # Workflow file names (environment-specific)
     WORKFLOW_FILE_DEV = "workflows.yaml"
     WORKFLOW_FILE_UAT = "workflows-uat.yaml"
+    # Pattern for environment-specific workflow templates: workflows-{env}.yaml
+    # e.g. workflows-test.yaml, workflows-dev.yaml, workflows-prod.yaml
+    WORKFLOW_FILE_ENV_TEMPLATE = "workflows-{env}.yaml"
 
     def __init__(
         self,
@@ -1180,12 +1183,9 @@ spec:
 
                 # Environment-specific virtual-service.yaml handling
                 # UAT: Copy as-is without templating
-                # DEV: Skip (not used in dev environment)
+                # DEV / other envs: Skip for now (will be enabled later based on env & project config)
                 if template_file.name == 'virtual-service.yaml':
-                    if environment.lower() == self.ENV_DEV:
-                        logger.info(f"Skipping {relative_path} - virtual-service.yaml is not used in DEV environment")
-                        continue
-                    elif environment.lower() == self.ENV_UAT:
+                    if environment.lower() == self.ENV_UAT:
                         # For UAT: Copy the file directly without template processing
                         logger.info(f"Copying {relative_path} as-is for UAT environment (no templating)")
                         path_parts = relative_path.parts
@@ -1206,6 +1206,10 @@ spec:
                             'copy_mode': 'direct'
                         })
                         logger.info(f"Copied: {relative_path} (direct copy, no templating)")
+                        continue
+                    else:
+                        # Skip for all non-UAT environments for now
+                        logger.info(f"Skipping {relative_path} - virtual-service.yaml is skipped for '{environment}' environment (will be enabled later based on env & project config)")
                         continue
 
                 # Environment-specific gateway.yaml handling
@@ -1238,9 +1242,18 @@ spec:
                         continue
 
                 # Environment-specific workflow file selection
-                # For UAT: use workflows-uat.yaml, skip workflows.yaml
-                # For other environments: use workflows.yaml, skip workflows-uat.yaml
+                # Priority:
+                #   1. workflows-{env}.yaml (e.g. workflows-test.yaml) — most specific
+                #   2. workflows-uat.yaml — legacy UAT-specific (only for UAT env)
+                #   3. workflows.yaml — generic fallback (only for non-UAT env)
+                env_workflow_file = self.WORKFLOW_FILE_ENV_TEMPLATE.format(env=environment.lower())
+
                 if template_file.name == self.WORKFLOW_FILE_DEV:
+                    # Skip generic workflows.yaml if an env-specific file exists or if UAT
+                    env_specific_path = template_file.parent / env_workflow_file
+                    if env_specific_path.exists():
+                        logger.info(f"Skipping {relative_path} - using {env_workflow_file} for {environment} environment")
+                        continue
                     if environment.lower() == self.ENV_UAT:
                         logger.info(f"Skipping {relative_path} - using {self.WORKFLOW_FILE_UAT} for UAT environment")
                         continue
@@ -1252,6 +1265,18 @@ spec:
                     else:
                         # For UAT, rename the output file to workflows.yaml (standard name)
                         logger.info(f"Using {self.WORKFLOW_FILE_UAT} for UAT environment (will be output as {self.WORKFLOW_FILE_DEV})")
+
+                # Skip env-specific workflow templates that don't match the current environment
+                # e.g. skip workflows-test.yaml when deploying to dev
+                if template_file.name.startswith("workflows-") and template_file.name.endswith(".yaml") \
+                        and template_file.name != self.WORKFLOW_FILE_UAT \
+                        and template_file.name != env_workflow_file:
+                    logger.info(f"Skipping {relative_path} - workflow template for a different environment")
+                    continue
+
+                # Rename env-specific workflow file (e.g. workflows-test.yaml) to workflows.yaml in output
+                if template_file.name == env_workflow_file:
+                    logger.info(f"Using {env_workflow_file} for {environment} environment")
 
                 # Insert microservice_name after the template folder (git-ops or github)
                 # Structure: output_base_dir/git-ops/microservice_name/values.yaml
@@ -1265,6 +1290,11 @@ spec:
                         # Replace workflows-uat.yaml with workflows.yaml in the output path
                         rest_of_path = Path(str(rest_of_path).replace(self.WORKFLOW_FILE_UAT, self.WORKFLOW_FILE_DEV))
                         logger.info(f"Renaming output file: {self.WORKFLOW_FILE_UAT} -> {self.WORKFLOW_FILE_DEV}")
+
+                    # For env-specific workflows (e.g. workflows-test.yaml): rename to workflows.yaml in output
+                    if template_file.name == env_workflow_file:
+                        rest_of_path = Path(str(rest_of_path).replace(env_workflow_file, self.WORKFLOW_FILE_DEV))
+                        logger.info(f"Renaming output file: {env_workflow_file} -> {self.WORKFLOW_FILE_DEV}")
 
                     output_file = self.output_base_dir / template_folder / microservice_name / rest_of_path
                 else:

@@ -215,8 +215,8 @@ async def cleanup_deployment(
                 container_port=8080,
                 git_repo_name=request.microservice_repo_url.rstrip("/").split("/")[-1].removesuffix(".git"),
                 git_branch="main",
-                # Other required fields with safe defaults
-                env_content=None,
+                # Other required fields with safe defaults (unused in cleanup)
+                env_content="CLEANUP=true",
                 cronjobs=None,
                 worker=None
             )

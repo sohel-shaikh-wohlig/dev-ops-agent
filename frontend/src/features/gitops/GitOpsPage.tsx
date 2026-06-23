@@ -120,6 +120,9 @@ export function GitOpsPage() {
         if (value.environment === "dev" && value.gitBranch !== "dev") {
           return "For 'dev' environment, Git Branch must be 'dev'";
         }
+        if (value.environment === "test" && value.gitBranch !== "test") {
+          return "For 'test' environment, Git Branch must be 'test'";
+        }
         if (value.environment === "uat" && value.gitBranch !== "uat") {
           return "For 'uat' environment, Git Branch must be 'uat'";
         }
@@ -368,6 +371,8 @@ export function GitOpsPage() {
                         // Dynamic Logic
                         if (val === "dev") {
                           form.setFieldValue("gitBranch", "dev");
+                        } else if (val === "test") {
+                          form.setFieldValue("gitBranch", "test");
                         } else if (val === "uat") {
                           form.setFieldValue("gitBranch", "uat");
                         }

@@ -44,7 +44,7 @@ def get_deployment_tools() -> list[Tool]:
                 "properties": {
                     "environment": {
                         "type": "string",
-                        "enum": ["dev", "staging", "production", "qa", "uat"],
+                        "enum": ["dev", "test", "staging", "production", "qa", "uat"],
                         "description": "Target deployment environment"
                     },
                     "microservice_name": {
@@ -160,7 +160,7 @@ def get_deployment_tools() -> list[Tool]:
                     },
                     "environment": {
                         "type": "string",
-                        "enum": ["dev", "staging", "production", "qa", "uat"],
+                        "enum": ["dev", "test", "staging", "production", "qa", "uat"],
                         "description": "Target environment"
                     },
                     "microservice_url": {
@@ -231,7 +231,7 @@ def get_deployment_tools() -> list[Tool]:
                     },
                     "environment": {
                         "type": "string",
-                        "enum": ["dev", "staging", "production", "qa", "uat"],
+                        "enum": ["dev", "test", "staging", "production", "qa", "uat"],
                         "description": "Target environment"
                     },
                     "domain_name": {
@@ -337,7 +337,7 @@ def get_deployment_tools() -> list[Tool]:
                     },
                     "environment": {
                         "type": "string",
-                        "enum": ["dev", "staging", "production", "qa", "uat"],
+                        "enum": ["dev", "test", "staging", "production", "qa", "uat"],
                         "description": "Target environment"
                     },
                     "resource_type": {
@@ -448,7 +448,7 @@ def get_deployment_tools() -> list[Tool]:
                 "properties": {
                     "environment": {
                         "type": "string",
-                        "enum": ["dev", "staging", "production", "qa", "uat"],
+                        "enum": ["dev", "test", "staging", "production", "qa", "uat"],
                         "description": "Target deployment environment"
                     },
                     "microservice_github_url": {
