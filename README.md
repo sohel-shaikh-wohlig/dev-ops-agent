@@ -102,6 +102,7 @@ dev-ops-automation/
 │   └── scripts/                            # Script logs
 │       └── token_refresh.log
 │
+|
 ├── .gitignore
 ├── requirements.txt                        # FastAPI dependencies
 ├── requirements-mcp.txt                    # MCP-specific dependencies
