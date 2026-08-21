@@ -108,3 +108,5 @@ dev-ops-automation/
 ├── requirements-mcp.txt                    # MCP-specific dependencies
 ├── pyproject.toml                          # Project metadata
 └── README.md                               # Main project README
+
+Changed
