@@ -110,9 +110,12 @@ class ArgoCDController:
                 data=app
             )
         except ArgoCDAPIException as e:
+            detail = f"Failed to create application: {str(e)}"
+            if e.response_text:
+                detail += f" | ArgoCD response: {e.response_text}"
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to create application: {str(e)}"
+                detail=detail
             )
     
     @staticmethod
