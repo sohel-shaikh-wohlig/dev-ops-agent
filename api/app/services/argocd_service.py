@@ -129,12 +129,16 @@ class ArgoCDService:
 
         # Initialize client with resolved configuration
         try:
+            from app.core.config import get_settings
+            request_timeout = get_settings().ARGOCD_TIMEOUT_SECONDS
+
             self.client = ArgoCDClient(
                 server_url=self.server_url,
                 auth_token=self.auth_token,
                 username=self.username,
                 password=self.password,
-                verify_ssl=verify_ssl
+                verify_ssl=verify_ssl,
+                timeout=request_timeout
             )
             self.is_available = True
         except Exception as e:
@@ -530,10 +534,13 @@ class ArgoCDService:
 
                 # Update client with new token
                 self.auth_token = new_token
+                from app.core.config import get_settings
+
                 self.client = ArgoCDClient(
                     server_url=self.server_url,
                     auth_token=new_token,
-                    verify_ssl=self.verify_ssl
+                    verify_ssl=self.verify_ssl,
+                    timeout=get_settings().ARGOCD_TIMEOUT_SECONDS
                 )
 
                 logger.info("Token renewed successfully, retrying operation...")
