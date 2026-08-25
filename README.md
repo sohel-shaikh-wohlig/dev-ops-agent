@@ -1,26 +1,51 @@
-### Recommended Folder Structure
+# DevOps Automation Platform
+
+Manages microservice deployments across ArgoCD, GitOps, Kubernetes, GitHub, and Cloudflare.
+See [CLAUDE.md](CLAUDE.md) for development commands, architecture notes, and environment configuration.
+
+## Folder Structure
+
+```
 dev-ops-automation/
-├── api/                                    # Your existing API
-│   ├── apps/
-│   │   ├── controller/                     # Existing controllers
-│   │   ├── routes/                         # Existing routes
-│   |   ├── models/                         # Pydantic models
-│   │   └── services/                       # Existing services
-│   │       ├── gitops_service.py           # Your deployment logic
-│   │       ├── argocd_service.py
-│   │       ├── github_service.py
-│   │       └── cloudflare_service.py
-|   |
-│   ├── config/                             # FastAPI configuration
-│   └── main.py                             # FastAPI app entry point
+├── api/                                    # FastAPI backend (see api/CLAUDE.md)
+│   ├── app/
+│   │   ├── client_config/                  # Per-client YAML config (acme, vaultfy)
+│   │   ├── controllers/                    # Request validation / response formatting
+│   │   │   ├── argocd_controller.py
+│   │   │   ├── configmap_controller.py
+│   │   │   ├── github_webhook_controller.py
+│   │   │   ├── gitops_manifest_controller.py
+│   │   │   └── terraform_controller.py
+│   │   ├── core/                           # Config, DI, logging, redis, pubsub, websockets
+│   │   ├── models/                         # Pydantic request/response schemas
+│   │   ├── repositories/                   # Data access layer
+│   │   ├── routes/                         # FastAPI endpoint definitions
+│   │   ├── services/                       # Business logic
+│   │   │   ├── argocd_service.py
+│   │   │   ├── git_service.py
+│   │   │   ├── gitops_template_service.py
+│   │   │   ├── cloudflare_service.py
+│   │   │   ├── github_webhook_service.py
+│   │   │   ├── deployment_service.py
+│   │   │   ├── session_manager.py
+│   │   │   └── ...
+│   │   ├── templates/                      # Helm charts, GitHub Actions, Terraform
+│   │   │   ├── git-ops/
+│   │   │   ├── github/
+│   │   │   └── terraform/
+│   │   └── utils/                          # Low-level clients (argocd_client, gh_cli, ...)
+│   │
+│   ├── main.py                             # FastAPI app entry point
+│   ├── requirements.txt                    # Backend dependencies
+│   ├── start.sh                            # Local run script
+│   └── .env.example
 │
-├── mcp/                                    # MCP Integration (NEW)
+├── devops_mcp/                             # MCP servers for Claude Desktop
 │   ├── __init__.py
 │   ├── servers/                            # MCP server implementations
 │   │   ├── __init__.py
-│   │   ├── devops_automation.py            # Your custom deployment MCP
-│   │   ├── kubernetes_multi.py             # Multi-cluster K8s MCP
-│   │   └── token_provider.py               # Token management MCP (optional)
+│   │   ├── devops_automation.py            # Deployment orchestration MCP
+│   │   └── kubernetes_multi.py             # Multi-cluster K8s MCP
 │   │
 │   ├── shared/                             # Shared MCP utilities
 │   │   ├── __init__.py
@@ -28,85 +53,61 @@ dev-ops-automation/
 │   │   ├── api_client.py                   # FastAPI client wrapper
 │   │   └── logging.py                      # MCP-specific logging
 │   │
-│   ├── config/                             # MCP configurations
+│   ├── config/                             # MCP configuration
 │   │   ├── __init__.py
 │   │   ├── settings.py                     # MCP settings (URLs, tokens, etc.)
 │   │   └── contexts.py                     # Kubernetes context mappings
 │   │
-│   └── tools/                              # Tool definitions (schemas)
-│       ├── __init__.py
-│       ├── deployment_tools.py             # Deployment tool schemas
-│       └── kubernetes_tools.py             # K8s tool schemas
-|
-|
-|── frontend
-│   └── src/
+│   ├── tools/                              # Tool definitions (schemas)
+│   │   ├── __init__.py
+│   │   └── deployment_tools.py
+│   │
+│   ├── requirements-mcp.txt                # MCP dependencies
+│   ├── PROMPTS.md                          # Example Claude prompts
+│   └── README.md
+│
+├── frontend/                               # React + TypeScript dashboard
+│   ├── src/
+│   │   ├── features/                       # Feature-based modules
+│   │   │   ├── argocd/
+│   │   │   ├── configmap/
+│   │   │   ├── dashboard/
+│   │   │   ├── github-deploy/
+│   │   │   ├── gitops/
+│   │   │   └── terraform/
+│   │   ├── components/                     # Shared UI components
+│   │   ├── shared/
+│   │   ├── services/
+│   │   ├── hooks/
+│   │   ├── lib/
+│   │   ├── assets/
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   │
+│   ├── public/
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   └── .env.example
 │
 ├── scripts/                                # Management scripts
 │   ├── setup/
-│   │   ├── setup_mcp.sh                    # Initial MCP setup
-│   │   ├── setup_multi_cluster_k8s.sh      # K8s cluster setup
-│   │   └── create_user.py                  # Create auth users
-│   │
-│   ├── maintenance/
-│   │   ├── refresh_tokens.py               # Token refresh script
-│   │   ├── sync_clusters.py                # Sync K8s cluster configs
-│   │   └── health_check.py                 # MCP health check
-│   │
-│   └── deployment/
-│       ├── deploy_mcp_servers.sh           # Deploy MCP to production
-│       └── rollback_mcp.sh                 # Rollback MCP changes
-│
-├── config/                                 # Project-wide configuration
-│   ├── claude_desktop/
-│   │   ├── config.dev.json                 # Development config
-│   │   ├── config.staging.json             # Staging config
-│   │   └── config.production.json          # Production config
-│   │
-│   ├── kubernetes/
-│   │   ├── contexts.yaml                   # K8s context definitions
-│   │   └── cluster_mappings.yaml           # Environment → cluster mapping
-│   │
-│   └── environments/
-│       ├── .env.development
-│       ├── .env.staging
-│       └── .env.production
+│   │   └── setup_multi_cluster_k8s.sh      # K8s cluster setup
+│   └── maintenance/
+│       └── health_check.py                 # MCP health check
 │
 ├── docs/                                   # Documentation
-│   ├── mcp/
-│   │   ├── README.md                       # MCP overview
-│   │   ├── setup.md                        # Setup instructions
-│   │   ├── tools.md                        # Tool documentation
-│   │   └── examples.md                     # Usage examples
-│   │
-│   └── api/
-│       └── ... (existing API docs)
+│   ├── api/
+│   │   └── websoket_implementation_plan.md
+│   └── mcp/
+│       └── README.md                       # MCP overview
 │
-├── tests/                                  # Tests
-│   ├── api/                                # Existing API tests
-│   │   └── ...
-│   │
-│   └── mcp/                                # MCP tests
-│       ├── __init__.py
-│       ├── test_devops_mcp.py              # Test deployment MCP
-│       ├── test_kubernetes_mcp.py          # Test K8s MCP
-│       └── fixtures/                       # Test fixtures
-│           ├── mock_deployments.json
-│           └── mock_clusters.json
+├── logs/                                   # Runtime logs (gitignored)
+│   └── mcp/
 │
-├── logs/                                   # Logs directory
-│   ├── api/                                # FastAPI logs
-│   ├── mcp/                                # MCP server logs
-│   │   ├── devops_automation.log
-│   │   └── kubernetes_multi.log
-│   └── scripts/                            # Script logs
-│       └── token_refresh.log
-│
-|
+├── docker-compose.yml
+├── PLAN-gh-cli-migration.md                # GitHub CLI migration plan
+├── CLAUDE.md                               # Guidance for Claude Code
 ├── .gitignore
-├── requirements.txt                        # FastAPI dependencies
-├── requirements-mcp.txt                    # MCP-specific dependencies
-├── pyproject.toml                          # Project metadata
-└── README.md                               # Main project README
-
-Changed...............
+└── README.md
+```
