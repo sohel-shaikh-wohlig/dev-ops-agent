@@ -1,5 +1,5 @@
 """Tests for validators.is_valid_email and validators.clamp."""
-from validators import is_valid_email, clamp
+from validators import is_valid_email, clamp, is_valid_port, is_valid_hex_color, is_even
 
 
 # --- is_valid_email ---
