@@ -101,3 +101,8 @@ def test_hex_color_wrong_length():
 
 def test_hex_color_invalid_chars():
     assert is_valid_hex_color("#GGHHII") is False
+
+
+def test_port_type_error_message():
+    """is_valid_port returns False (not raises) for non-ints."""
+    assert is_valid_port(None) is False
