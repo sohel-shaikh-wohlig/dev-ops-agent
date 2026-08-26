@@ -37,3 +37,15 @@ def test_multiply_floats():
 def test_types_are_numeric():
     assert isinstance(add(1, 2), (int, float))
     assert isinstance(multiply(1, 2), (int, float))
+
+
+def test_subtract_positive():
+    assert subtract(5, 3) == 2
+
+
+def test_subtract_negative_result():
+    assert subtract(3, 5) == -2
+
+
+def test_subtract_zero():
+    assert subtract(4, 0) == 4
