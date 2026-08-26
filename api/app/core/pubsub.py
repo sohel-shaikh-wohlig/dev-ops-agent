@@ -63,6 +63,7 @@ class PubSubSubscriber:
 
         while self._running:
             pubsub: Optional[aioredis.client.PubSub] = None
+            client: Optional[aioredis.Redis] = None
             try:
                 settings = get_settings()
                 client = aioredis.from_url(
@@ -92,12 +93,24 @@ class PubSubSubscriber:
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, MAX_BACKOFF)
             finally:
+                # Both the pubsub AND the client it came from must be released.
+                #
+                # from_url() builds a new Redis client with its own connection
+                # pool on every iteration of this loop. Closing only the pubsub
+                # left that pool open, so each reconnect leaked a pool and its
+                # sockets — unbounded over a long-running instability, which is
+                # exactly when this loop iterates most.
                 if pubsub is not None:
                     try:
                         await pubsub.punsubscribe(CHANNEL_PATTERN)
                         await pubsub.aclose()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"Pub/Sub cleanup failed (non-fatal): {exc}")
+                if client is not None:
+                    try:
+                        await client.aclose()
+                    except Exception as exc:
+                        logger.debug(f"Redis client close failed (non-fatal): {exc}")
 
     @staticmethod
     async def _dispatch(message: dict) -> None:
