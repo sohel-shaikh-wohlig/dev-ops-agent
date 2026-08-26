@@ -111,3 +111,7 @@ def test_port_type_error_message():
 # --- hex color edge cases ---
 def test_hex_color_all_digits():
     assert is_valid_hex_color("#123456") is True
+
+
+def test_hex_color_empty_string():
+    assert is_valid_hex_color("") is False
