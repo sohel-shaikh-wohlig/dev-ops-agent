@@ -106,3 +106,8 @@ def test_hex_color_invalid_chars():
 def test_port_type_error_message():
     """is_valid_port returns False (not raises) for non-ints."""
     assert is_valid_port(None) is False
+
+
+# --- hex color edge cases ---
+def test_hex_color_all_digits():
+    assert is_valid_hex_color("#123456") is True
