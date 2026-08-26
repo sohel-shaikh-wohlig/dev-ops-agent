@@ -32,3 +32,15 @@ def clamp(value: float, low: float, high: float) -> float:
     if high < low:
         raise ValueError("high must be >= low")
     return max(low, min(value, high))
+
+
+def is_valid_port(value: int) -> bool:
+    """Check whether a value is a valid TCP/UDP port (1-65535).
+
+    Args:
+        value: The port number to validate.
+
+    Returns:
+        True if the value is an int in [1, 65535].
+    """
+    return isinstance(value, int) and 1 <= value <= 65535

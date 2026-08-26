@@ -45,3 +45,25 @@ def test_clamp_inverted_range_raises():
     import pytest
     with pytest.raises(ValueError):
         clamp(5, 10, 0)
+
+
+# --- is_valid_port ---
+def test_port_valid():
+    assert is_valid_port(8080) is True
+
+
+def test_port_boundaries():
+    assert is_valid_port(1) is True
+    assert is_valid_port(65535) is True
+
+
+def test_port_zero_invalid():
+    assert is_valid_port(0) is False
+
+
+def test_port_negative_invalid():
+    assert is_valid_port(-1) is False
+
+
+def test_port_too_large_invalid():
+    assert is_valid_port(65536) is False
