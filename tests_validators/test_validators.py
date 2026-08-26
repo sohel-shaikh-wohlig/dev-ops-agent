@@ -120,3 +120,16 @@ def test_hex_color_empty_string():
 def test_clamp_returns_float():
     """clamp returns a numeric type for float inputs."""
     assert isinstance(clamp(1.5, 0, 2), float)
+
+
+# --- is_even ---
+def test_is_even_true():
+    assert is_even(4) is True
+
+
+def test_is_even_false():
+    assert is_even(3) is False
+
+
+def test_is_even_zero():
+    assert is_even(0) is True

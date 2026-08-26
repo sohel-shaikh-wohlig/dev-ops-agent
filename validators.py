@@ -58,3 +58,15 @@ def is_valid_hex_color(value: str) -> bool:
     if not value or len(value) != 7 or value[0] != "#":
         return False
     return all(c in "0123456789abcdefABCDEF" for c in value[1:])
+
+
+def is_even(value: int) -> bool:
+    """Check whether an integer is even.
+
+    Args:
+        value: The integer to check.
+
+    Returns:
+        True if value is divisible by 2.
+    """
+    return value % 2 == 0
