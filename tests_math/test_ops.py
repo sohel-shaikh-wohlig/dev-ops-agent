@@ -49,3 +49,9 @@ def test_subtract_negative_result():
 
 def test_subtract_zero():
     assert subtract(4, 0) == 4
+
+
+def test_subtract_exists_and_works():
+    """Direct coverage for math_utils.ops.subtract."""
+    from math_utils.ops import subtract
+    assert subtract(10, 4) == 6
