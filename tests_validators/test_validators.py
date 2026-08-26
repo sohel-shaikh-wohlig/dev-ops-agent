@@ -67,3 +67,16 @@ def test_port_negative_invalid():
 
 def test_port_too_large_invalid():
     assert is_valid_port(65536) is False
+
+
+# --- is_valid_port (second pass) ---
+def test_port_valid_tcp():
+    assert is_valid_port(443) is True
+
+
+def test_port_string_invalid():
+    assert is_valid_port("80") is False  # type: ignore[arg-type]
+
+
+def test_port_float_invalid():
+    assert is_valid_port(80.5) is False  # type: ignore[arg-type]
