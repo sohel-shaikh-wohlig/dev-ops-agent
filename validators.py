@@ -44,3 +44,17 @@ def is_valid_port(value: int) -> bool:
         True if the value is an int in [1, 65535].
     """
     return isinstance(value, int) and 1 <= value <= 65535
+
+
+def is_valid_hex_color(value: str) -> bool:
+    """Check whether a string is a 6-digit hex color like #A1B2C3.
+
+    Args:
+        value: The string to check.
+
+    Returns:
+        True if the value matches the #RRGGBB pattern.
+    """
+    if not value or len(value) != 7 or value[0] != "#":
+        return False
+    return all(c in "0123456789abcdefABCDEF" for c in value[1:])

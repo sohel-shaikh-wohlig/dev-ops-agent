@@ -80,3 +80,24 @@ def test_port_string_invalid():
 
 def test_port_float_invalid():
     assert is_valid_port(80.5) is False  # type: ignore[arg-type]
+
+
+# --- is_valid_hex_color ---
+def test_hex_color_valid():
+    assert is_valid_hex_color("#A1B2C3") is True
+
+
+def test_hex_color_lowercase_valid():
+    assert is_valid_hex_color("#a1b2c3") is True
+
+
+def test_hex_color_missing_hash():
+    assert is_valid_hex_color("A1B2C3") is False
+
+
+def test_hex_color_wrong_length():
+    assert is_valid_hex_color("#FFF") is False
+
+
+def test_hex_color_invalid_chars():
+    assert is_valid_hex_color("#GGHHII") is False
