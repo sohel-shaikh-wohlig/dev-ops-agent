@@ -115,3 +115,8 @@ def test_hex_color_all_digits():
 
 def test_hex_color_empty_string():
     assert is_valid_hex_color("") is False
+
+
+def test_clamp_returns_float():
+    """clamp returns a numeric type for float inputs."""
+    assert isinstance(clamp(1.5, 0, 2), float)
