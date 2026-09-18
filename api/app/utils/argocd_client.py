@@ -7,6 +7,17 @@ from app.core.exceptions import ArgoCDAPIException, TokenExpiredException
 # Disable SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# Default timeout for outbound ArgoCD requests, in seconds.
+#
+# Without a timeout, requests blocks indefinitely: an unresponsive ArgoCD server
+# holds the calling worker forever rather than failing fast, and the retry logic
+# in ArgoCDService._execute_with_retry never gets a chance to run.
+#
+# 30s matches the FastAPIClient default in devops_mcp/shared/api_client.py so
+# both outbound clients share one budget. Override per-instance via the
+# `timeout` constructor argument, or globally via ARGOCD_TIMEOUT_SECONDS.
+DEFAULT_TIMEOUT_SECONDS = 30.0
+
 
 class ArgoCDClient:
     """Low-level ArgoCD API client"""
@@ -17,10 +28,12 @@ class ArgoCDClient:
         auth_token: Optional[str] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        verify_ssl: bool = True
+        verify_ssl: bool = True,
+        timeout: float = DEFAULT_TIMEOUT_SECONDS
     ):
         self.server_url = server_url.rstrip('/')
         self.verify_ssl = verify_ssl
+        self.timeout = timeout
         self.session = requests.Session()
         self.session.verify = verify_ssl
         
@@ -42,7 +55,12 @@ class ArgoCDClient:
         payload = {"username": username, "password": password}
         
         try:
-            response = requests.post(url, json=payload, verify=self.verify_ssl)
+            response = requests.post(
+                url,
+                json=payload,
+                verify=self.verify_ssl,
+                timeout=self.timeout,
+            )
             response.raise_for_status()
             token = response.json().get('token')
             
@@ -76,6 +94,9 @@ class ArgoCDClient:
         url = f"{self.server_url}/api/v1/{endpoint.lstrip('/')}"
         
         try:
+            # kwargs may carry a caller-supplied timeout; setdefault means an
+            # explicit per-call value still wins over the instance default.
+            kwargs.setdefault("timeout", self.timeout)
             response = self.session.request(method, url, **kwargs)
             
             # Check for token expiration
@@ -94,6 +115,13 @@ class ArgoCDClient:
                 message=f"HTTP {response.status_code}: {str(e)}",
                 status_code=response.status_code,
                 response_text=response.text
+            )
+        except requests.exceptions.Timeout as e:
+            # Surfaced separately from the generic RequestException so callers —
+            # and ArgoCDService._execute_with_retry in particular — can tell a
+            # slow server from a broken one.
+            raise ArgoCDAPIException(
+                f"Request timed out after {self.timeout}s: {str(e)}"
             )
         except requests.exceptions.RequestException as e:
             raise ArgoCDAPIException(f"Request failed: {str(e)}")

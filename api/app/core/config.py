@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     ARGOCD_USERNAME: Optional[str] = Field(None, description="ArgoCD username")
     ARGOCD_PASSWORD: Optional[str] = Field(None, description="ArgoCD password")
 
+    # Request timeout for all outbound ArgoCD HTTP calls, in seconds.
+    # Mirrors the default FastAPIClient already uses (devops_mcp/shared/api_client.py),
+    # so both outbound clients fail on the same budget.
+    ARGOCD_TIMEOUT_SECONDS: float = Field(
+        30.0,
+        description="Timeout in seconds for outbound ArgoCD API requests.",
+    )
+
     # DEV Environment ArgoCD Configuration
     ARGOCD_SERVER_DEV: Optional[str] = Field(None, description="ArgoCD server URL for DEV")
     ARGOCD_TOKEN_DEV: Optional[str] = Field(None, description="ArgoCD token for DEV")
